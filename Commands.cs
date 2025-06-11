@@ -72,7 +72,7 @@ namespace RRS
                 {
                     var attachment = Context.Message.Attachments;
                     var fileType = attachment.ElementAt(0).ContentType;
-                    if (filetype == null)
+                    if (fileType == null)
                     {
                         var roflTrim = attachment.ElementAt(0).Url;
                         Match match = Regex.Match(roflTrim, @"\.rofl\b");
