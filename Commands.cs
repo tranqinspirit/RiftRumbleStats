@@ -4,11 +4,14 @@ using Discord.WebSocket;
 using Microsoft.VisualBasic.ApplicationServices;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+
 
 namespace RRS
 {
@@ -60,6 +63,33 @@ namespace RRS
                 var userInfo = user ?? Context.User;
                 await ReplyAsync($"{userInfo.Username}" + " has correct test permissions.");
             }
+
+            [Command("filecheck")]
+            // check channel for files
+            public async Task CheckFile()
+            {
+                if (Context.Message.Attachments.Count > 0)
+                {
+                    var attachment = Context.Message.Attachments;
+                    var fileType = attachment.ElementAt(0).ContentType;
+                    if (filetype == null)
+                    {
+                        var roflTrim = attachment.ElementAt(0).Url;
+                        Match match = Regex.Match(roflTrim, @"\.rofl\b");
+                        string fixString = match.ToString();
+                        fixString = fixString.TrimStart('{');
+                        fixString = fixString.TrimEnd('}');
+                        if (fixString.Equals (".rofl"))
+                            await ReplyAsync("File included is a " + fixString + " file");
+
+                    }
+                    else
+                        await ReplyAsync("File included is a " + filetype + " file");
+                }
+                else
+                    await ReplyAsync("message does not have an attachment");
+            }
+
         }
 
 
