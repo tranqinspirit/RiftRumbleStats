@@ -1,4 +1,5 @@
 ﻿using Discord;
+using Discord.Commands;
 using Discord.WebSocket;
 using System;
 using System.Collections.Generic;
@@ -9,39 +10,57 @@ using System.Text;
 using System.Threading.Tasks;
 
 // Primarily backend functionality
-class Program
+namespace RRS
 {
-    private static DiscordSocketClient _client;
-    private static Task Log(LogMessage msg)
+    class Client
     {
-        Console.WriteLine(msg.ToString());
-        return Task.CompletedTask;
-    }
-
-    public static async Task Main()
-    {
-        _client = new DiscordSocketClient();
-
-        _client.Log += Log;
-
-        try
+        private static DiscordSocketClient _client;
+        private static CommandService _commands;
+        private static Task Log(LogMessage msg)
         {
-            String token;
-            using (StreamReader reader = new("filepath")) // plug in correct filepath to not error out
+            Console.WriteLine(msg.ToString());
+            return Task.CompletedTask;
+        }
+
+        public static async Task Main()
+        {
+            // Actually enable the gatewayintents..
+            var config = new DiscordSocketConfig
             {
-               token = reader.ReadToEnd();
+                GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.Guilds | GatewayIntents.MessageContent | GatewayIntents.DirectMessages
+            };
+            _client = new DiscordSocketClient(config);
+
+            _client.Log += Log;
+
+            try
+            {
+                String token;
+                using (StreamReader reader = new("filepath")) // plug in correct filepath to not error out
+                {
+                    token = reader.ReadToEnd();
+                }
+
+                await _client.LoginAsync(TokenType.Bot, token);
+                await _client.StartAsync();
+
+                // check perms
+
+                // Initiate the command handler
+                _commands = new CommandService();
+                CommandHandler handler = new RRS.CommandHandler(_client, _commands);
+                await handler.InstallCommandsAsync();
+
+
+
+                // Blocks the task until the program closes.
+                await Task.Delay(-1);
             }
-
-            await _client.LoginAsync(TokenType.Bot, token);
-            await _client.StartAsync();
-
-            // Blocks the task until the program closes.
-            await Task.Delay(-1);
-        }   
-        catch (Exception e)
-        {
-            Console.WriteLine("Couldn't find token. Exiting.");
-            return;
+            catch (Exception e)
+            {
+                Console.WriteLine("Couldn't find token. Exiting.");
+                return;
+            }
         }
     }
 }
