@@ -84,7 +84,7 @@ namespace RRS
 
                     }
                     else
-                        await ReplyAsync("File included is a " + filetype + " file");
+                        await ReplyAsync("File included is a " + fileType + " file");
                 }
                 else
                     await ReplyAsync("message does not have an attachment");
