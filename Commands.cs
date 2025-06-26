@@ -1,4 +1,5 @@
-﻿using Discord;
+﻿using BitMiracle.LibTiff.Classic;
+using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
 using Microsoft.VisualBasic.ApplicationServices;
@@ -12,8 +13,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-
-namespace RRS
+namespace RiftRumbleStats
 {
     public class CommandHandler
     {
@@ -50,13 +50,15 @@ namespace RRS
         public class FileModule : ModuleBase<SocketCommandContext>
         {
             // need to store file names somehow to make sure we don't do duplicate
-            // checkmark files that we have done stuff with?
         }
 
         // finalized commands for mods
         [RequireUserPermission(GuildPermission.Administrator, Group = "BotTest")]
         public class AdminModule : ModuleBase<SocketCommandContext>
         {
+            IEmote yesreact = new Emoji("✅");
+            IEmote noreact = new Emoji("⛔");
+
             [Command("permtest")]
             public async Task BotTest(SocketUser user = null)
             {
@@ -67,37 +69,34 @@ namespace RRS
             [Command("filecheck")]
             // check channel for files
             public async Task CheckFile()
-            {
-                if (Context.Message.Attachments.Count > 0)
+            { 
+                switch (RiftRumbleStats.FileHandling.CheckFileExt(Context.Message))
                 {
-                    var attachment = Context.Message.Attachments;
-                    var fileType = attachment.ElementAt(0).ContentType;
-                    if (fileType == null)
+                    case (2):
                     {
-                        var roflTrim = attachment.ElementAt(0).Url;
-                        Match match = Regex.Match(roflTrim, @"\.rofl\b");
-                        string fixString = match.ToString();
-                        fixString = fixString.TrimStart('{');
-                        fixString = fixString.TrimEnd('}');
-                        if (fixString.Equals (".rofl"))
-                            await ReplyAsync("File included is a " + fixString + " file");
-
+                       await Context.Message.AddReactionsAsync(new[] { yesreact });
+                       await ReplyAsync("File included is a .rofl file.");                        
                     }
-                    else
-                        await ReplyAsync("File included is a " + fileType + " file");
-                }
-                else
-                    await ReplyAsync("message does not have an attachment");
+                    break;
+                    case (1):
+                    {
+                        await Context.Message.AddReactionsAsync(new[] { noreact });
+                        await ReplyAsync("File included is the wrong file type.");                        
+                    } break;
+                    case (0):
+                    {
+                        await Context.Message.AddReactionsAsync(new[] { noreact });
+                        await ReplyAsync("message does not have an attachment");
+                    } break;
+                }                                
             }
-
         }
-
 
         // Retrieve client and CommandService instance via ctor
         public CommandHandler(DiscordSocketClient client, CommandService commands)
         {
             _commands = commands;
-            _client = client;
+            _client = client;      
         }
 
         public async Task InstallCommandsAsync()

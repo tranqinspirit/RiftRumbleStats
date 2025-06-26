@@ -13,6 +13,7 @@
     <PackageReference Include="Discord.Net.Rest" Version="3.17.4" />
     <PackageReference Include="Discord.Net.Webhook" Version="3.17.4" />
     <PackageReference Include="Discord.Net.WebSocket" Version="3.17.4" />
+    <PackageReference Include="IronXL.Excel" Version="2025.6.4" />
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.6" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.6" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />

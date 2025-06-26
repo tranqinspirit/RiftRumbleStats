@@ -10,7 +10,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 // Primarily backend functionality
-namespace RRS
+namespace RiftRumbleStats
 {
     class Client
     {
@@ -48,10 +48,11 @@ namespace RRS
 
                 // Initiate the command handler
                 _commands = new CommandService();
-                CommandHandler handler = new RRS.CommandHandler(_client, _commands);
+                CommandHandler handler = new RiftRumbleStats.CommandHandler(_client, _commands);
                 await handler.InstallCommandsAsync();
 
-
+                // TODO: initialize the sheet
+                // SLASH COMMANDS for grabbing stuff?
 
                 // Blocks the task until the program closes.
                 await Task.Delay(-1);
