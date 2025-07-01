@@ -53,7 +53,6 @@ namespace RiftRumbleStats
             public async Task ReactCheck(int messageCount) 
             {
                 var messages = await Context.Message.Channel.GetMessagesAsync(messageCount+1).FlattenAsync();
-               
                 foreach (var x in messages)
                 {
                     foreach (var y in x.Reactions.Values)
