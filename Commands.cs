@@ -1,10 +1,11 @@
-﻿using BitMiracle.LibTiff.Classic;
-using Discord;
+﻿using Discord;
 using Discord.Commands;
+using Discord.Rest;
 using Discord.WebSocket;
 using Microsoft.VisualBasic.ApplicationServices;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Eventing.Reader;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -19,6 +20,9 @@ namespace RiftRumbleStats
     {
         private readonly DiscordSocketClient _client;
         private readonly CommandService _commands;
+        private static FileHandling _filehandling;
+        public static IEmote yesreact = new Emoji("✅");
+        public static IEmote noreact = new Emoji("⛔");
         //private IServiceProvider services;
 
         /* Template for commands
@@ -45,10 +49,51 @@ namespace RiftRumbleStats
                 var userInfo = user ?? Context.Client.CurrentUser;
                 await ReplyAsync($"{userInfo.Username}#{userInfo.Discriminator}");
             }
+            [Command("reactcheck")]
+            public async Task ReactCheck(int messageCount) 
+            {
+                var messages = await Context.Message.Channel.GetMessagesAsync(messageCount+1).FlattenAsync();
+               
+                foreach (var x in messages)
+                {
+                    foreach (var y in x.Reactions.Values)
+                    {
+                        if (y.IsMe)
+                        {
+                            Console.WriteLine("Already reacted.");
+                            break;
+                        }
+                        else
+                        {
+                            await Context.Message.AddReactionsAsync(new[] { yesreact });
+                            Console.WriteLine("Adding reaction to " + x.Id);
+                        }
+                    }
+                }
+            }
         }
         [Group("file")]
         public class FileModule : ModuleBase<SocketCommandContext>
         {
+            [Command("setup")]
+            public async Task FileSetup()
+            {
+                // set up file managing stuff
+                bool success = false;
+                try
+                {
+                    _filehandling = new FileHandling(success);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Couldn't set up file handling.");
+                }
+                if (success)
+                    await ReplyAsync("File handling enabled.");
+                else
+                    await ReplyAsync("Failed to set up file handling.");
+            }
+            
             // need to store file names somehow to make sure we don't do duplicate
         }
 
@@ -56,9 +101,6 @@ namespace RiftRumbleStats
         [RequireUserPermission(GuildPermission.Administrator, Group = "BotTest")]
         public class AdminModule : ModuleBase<SocketCommandContext>
         {
-            IEmote yesreact = new Emoji("✅");
-            IEmote noreact = new Emoji("⛔");
-
             [Command("permtest")]
             public async Task BotTest(SocketUser user = null)
             {
@@ -96,7 +138,7 @@ namespace RiftRumbleStats
         public CommandHandler(DiscordSocketClient client, CommandService commands)
         {
             _commands = commands;
-            _client = client;      
+            _client = client;
         }
 
         public async Task InstallCommandsAsync()
@@ -122,7 +164,7 @@ namespace RiftRumbleStats
             var message = messageParam as SocketUserMessage;
             if (message == null) return;
 
-            int argPos = 0; // check the ! in the first char of the message 
+            int argPos = 0; // check the ! in the first char of the message
 
             // Determine if the message is a command based on the prefix and make sure no bots trigger commands
             // TODO get the channel from a configuration file or something
@@ -130,7 +172,9 @@ namespace RiftRumbleStats
                 message.HasMentionPrefix(_client.CurrentUser, ref argPos) || 
                 message.Author.IsBot ||
                 message.Channel.Id != 1365079374529040384))
+            {
                 return;
+            }
 
             // Create a WebSocket-based command context based on the message
             var context = new SocketCommandContext(_client, message);
