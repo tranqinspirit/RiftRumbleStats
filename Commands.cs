@@ -10,12 +10,15 @@ using System.Collections.Generic;
 using System.Diagnostics.Eventing.Reader;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using static System.Windows.Forms.DataFormats;
 
 namespace RiftRumbleStats
 {
@@ -26,17 +29,18 @@ namespace RiftRumbleStats
         private static FileHandling _filehandling;
         public static IEmote yesreact = new Emoji("✅");
         public static IEmote noreact = new Emoji("⛔");
-        private ulong guildId; 
-        //private IServiceProvider services;
+        private ulong guildId;
+		static readonly HttpClient fileclient = new HttpClient();
+		//private IServiceProvider services;
 
-        /* Template for commands
-        // OPTIONAL: [GROUP("<name>"] // this groups the commands but I'm not really sure how yet
+		/* Template for commands
+        // OPTIONAL: [GROUP("<name>"] // adds command parameters in the sent message
         // [Command]("name", RunMode = <runmode>)] // eg: RunMode.Async
         // [Summary("<description>")] // Believe this is just for dev side
         // OPTIONAL: [RequireContexxt(ContextType.<type>)]
         */
 
-        [Group("test")]
+		[Group("test")]
         public class TestModule : ModuleBase<SocketCommandContext>
         {
             [Command("say")]
@@ -57,6 +61,7 @@ namespace RiftRumbleStats
             public async Task ReactCheck(int messageCount) 
             {
                 var messages = await Context.Message.Channel.GetMessagesAsync(messageCount+1).FlattenAsync();
+                bool noReacts = false;
                 foreach (var x in messages)
                 {
                     foreach (var y in x.Reactions.Values)
@@ -74,35 +79,12 @@ namespace RiftRumbleStats
                         }
                     }
                 }
+                if (!noReacts)
+                    Console.WriteLine("No Reactions.");
             }
         }
-        [Group("file")]
-        public class FileModule : ModuleBase<SocketCommandContext>
-        {
-            [Command("setup")]
-            public async Task FileSetup()
-            {
-                // set up file managing stuff
-                bool success = false;
-                try
-                {
-                    _filehandling = new FileHandling(success);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine("Couldn't set up file handling.");
-                }
-                if (success)
-                    await ReplyAsync("File handling enabled.");
-                else
-                    await ReplyAsync("Failed to set up file handling.");
-            }
-            
-            // need to store file names somehow to make sure we don't do duplicate
-        }
-
-        // finalized commands for mods
-        [RequireUserPermission(GuildPermission.Administrator, Group = "BotTest")]
+        [Group("mod")]
+        [RequireRole("BotTest")]
         public class AdminModule : ModuleBase<SocketCommandContext>
         {
             [Command("permtest")]
@@ -116,7 +98,7 @@ namespace RiftRumbleStats
             // check channel for files
             public async Task CheckFile()
             { 
-                switch (RiftRumbleStats.FileHandling.CheckFileExt(Context.Message))
+                switch (RiftRumbleStats.FileHandling.CheckFileExtDiscord(Context.Message))
                 {
                     case (2):
                     {
@@ -147,10 +129,106 @@ namespace RiftRumbleStats
                     else
                         await ReplyAsync("Couldn't find " + member);
                 }
-            }
-        }
+			}
+            [Command("savereplays")]
+            public async Task SaveReplays(int messageCount)
+            {
+				if (Context.Message.Author.Id != 102920670630916096)
+				{
+					Console.WriteLine("Not allowed to use replay commands.");
+					return;
+				}
 
-        public async Task Client_Ready(DiscordSocketClient client)
+				string csvPath = "";
+                //0) make sure we have a csv file to actually output stuff to
+                if (!File.Exists(csvPath))
+                {
+                    await ReplyAsync("Couldn't find csv file.");
+                }
+                else
+                {
+                    List<string> fileNameList = [];
+					List<string> urlArray = [];
+					var messages = await Context.Message.Channel.GetMessagesAsync(messageCount + 1).FlattenAsync();
+					foreach (var x in messages)
+					{
+                        if (x.Reactions.Values.Count() > 0)
+                        {
+
+                            foreach (var y in x.Reactions.Values)
+                            {
+                                if (!y.IsMe)
+                                {
+                                    await Context.Message.AddReactionsAsync([yesreact]);
+                                }
+
+                            }
+                        }
+                        else
+                        {
+							await Context.Message.AddReactionsAsync([yesreact]);
+						}
+                            					
+                        foreach (IAttachment attachment in x.Attachments)
+                        {
+                            var fileType = attachment.ContentType;
+                            if (fileType == null)
+                            {
+                                var roflTrim = attachment.Filename;
+								Match match = Regex.Match(roflTrim, @"\.rofl\b");
+								string fixString = match.ToString();
+								fixString = fixString.TrimStart('{');
+								fixString = fixString.TrimEnd('}');
+                                if (fixString.Equals(".rofl"))
+                                {
+									urlArray.Add(attachment.Url);
+                                    fileNameList.Add(attachment.Filename);
+								}
+							}						
+                        }
+					}
+
+                    if (urlArray.Count() > 0)
+                    {
+                        try
+                        {
+                            foreach (var x in urlArray.Select((value, i) => new { i, value }))
+                            {
+                                var url = x.value;
+                                var index = x.i;
+								Console.WriteLine("DEBUG FILE NAME: " + fileNameList[index]);
+								Console.WriteLine("DEBUG FILE URL: " + url);
+                                using (var s = await fileclient.GetStreamAsync(url))
+                                {
+                                    using var fs = new FileStream(fileNameList[index], FileMode.CreateNew);
+                                    {
+                                        await s.CopyToAsync(fs);
+                                    }
+                                }
+                            }
+                        }
+                        catch (HttpRequestException e)
+                        {
+                            Console.WriteLine($"Error: {e.Message}");
+                        }
+                    }
+				}
+			}
+			/*
+            public async Task LoadReplays()
+            {
+            	pif (Context.Message.Author.Id != 102920670630916096)
+				{
+					Console.WriteLine("Not allowed to use replay commands.");
+					return;
+				}
+				// 4) check if they're valid
+				// 5) if invalid, move it to error folder otherwise do normal file checking and write to csv   
+			}
+            */
+		}
+
+		public async Task Client_Ready(DiscordSocketClient client)
         {
             // Let's build a guild command! We're going to need a guild so lets just put that in a variable.
             var guild = client.GetGuild(guildId);
@@ -159,15 +237,15 @@ namespace RiftRumbleStats
             var guildCommand = new SlashCommandBuilder();
 
             // Note: Names have to be all lowercase and match the regular expression ^[\w-]{3,32}$
-            guildCommand.WithName("first-command");
+            guildCommand.WithName("test");
 
             // Descriptions can have a max length of 100.
             guildCommand.WithDescription("This is my first guild slash command!");
 
             // Let's do our global command
             var globalCommand = new SlashCommandBuilder();
-            globalCommand.WithName("first-global-command");
-            globalCommand.WithDescription("This is my first global slash command");
+            globalCommand.WithName("test");
+            globalCommand.WithDescription("placeholder");
 
             try
             {
@@ -230,9 +308,9 @@ namespace RiftRumbleStats
             {
                 return;
             }
-
-            // Create a WebSocket-based command context based on the message
-            var context = new SocketCommandContext(_client, message);
+            
+			// Create a WebSocket-based command context based on the message
+			var context = new SocketCommandContext(_client, message);
 
             // Execute the command with the command context we just
             // created, along with the service provider for precondition checks.
