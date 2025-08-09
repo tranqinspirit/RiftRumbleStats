@@ -36,10 +36,11 @@ namespace RiftRumbleStats
 
             _client.Log += Log;
 
+            // Get the client going
             try
             {
                 String token;
-                using (StreamReader reader = new("filepath")) // plug in correct filepath to not error out
+                using (StreamReader reader = new(fileDir + "Config.txt")) // plug in correct filepath to not error out
                 {
                     token = reader.ReadToEnd();
                 }
@@ -51,7 +52,7 @@ namespace RiftRumbleStats
 
                 // Initiate the command handler
                 _commands = new CommandService();
-                CommandHandler handler = new RiftRumbleStats.CommandHandler(_client, _commands);
+                CommandHandler handler = new RiftRumbleStats.CommandHandler(_client, _commands, fileDir);
                 await handler.InstallCommandsAsync();
 
                 // TODO: initialize the sheet

@@ -30,7 +30,8 @@ namespace RiftRumbleStats
         public static IEmote yesreact = new Emoji("✅");
         public static IEmote noreact = new Emoji("⛔");
         private ulong guildId;
-		static readonly HttpClient fileclient = new HttpClient();
+		public static readonly HttpClient fileclient = new HttpClient();
+        private static string fileclientDir;
 		//private IServiceProvider services;
 
 		/* Template for commands
@@ -139,7 +140,7 @@ namespace RiftRumbleStats
 					return;
 				}
 
-				string csvPath = "";
+				string csvPath = fileclientDir + "test.csv";
                 //0) make sure we have a csv file to actually output stuff to
                 if (!File.Exists(csvPath))
                 {
@@ -196,12 +197,11 @@ namespace RiftRumbleStats
                             {
                                 var url = x.value;
                                 var index = x.i;
-								Console.WriteLine("DEBUG FILE NAME: " + fileNameList[index]);
-								Console.WriteLine("DEBUG FILE URL: " + url);
                                 using (var s = await fileclient.GetStreamAsync(url))
                                 {
-                                    using var fs = new FileStream(fileNameList[index], FileMode.CreateNew);
-                                    {
+                                    using var fs = new FileStream(fileclientDir + fileNameList[index], FileMode.CreateNew);
+
+									{
                                         await s.CopyToAsync(fs);
                                     }
                                 }
@@ -268,11 +268,12 @@ namespace RiftRumbleStats
         }
 
         // Retrieve client and CommandService instance via ctor
-        public CommandHandler(DiscordSocketClient client, CommandService commands)
+        public CommandHandler(DiscordSocketClient client, CommandService commands, string filePath)
         {
             _commands = commands;
             _client = client;
-        }
+			fileclientDir = filePath + "\\test\\";
+		}
 
         public async Task InstallCommandsAsync()
         {
