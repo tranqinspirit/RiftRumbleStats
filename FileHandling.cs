@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CsvHelper;
 using System.Globalization;
+using System.Reflection.Metadata.Ecma335;
 
 namespace RiftRumbleStats
 {
@@ -73,63 +74,73 @@ namespace RiftRumbleStats
             }
         }
 
-        public static bool ExportCSVData(string csvPath, List<PlayerData> data)
+        public static void ExportCSVData(string csvPath, List<PlayerData> data)
         {
-            if (false)
-                return false;
-
             using (var writer = new StreamWriter(csvPath))
             using (var csvWrite = new CsvWriter(writer, CultureInfo.InvariantCulture))
             {
                 csvWrite.WriteRecords(data);
                 csvWrite.Flush();
             }
-
-            return true;
         }
-		public static bool LoadReplayFile(string replayPath, string csvPath)
+		public static Task LoadReplayFile(string replayPath, string csvPath, string badFilePath)
         {
-			// go through all of the files inside the directory, make sure they're not executables, make sure they're valid, add them to a list of valid files, then parse them
-			if (!File.Exists(replayPath))
-				return false;
-
-            // Also make sure the output csv file exists..
-            string gameID = "blahblah"; // get this once and then just copy it to the other entries..
-
-			// need another place to put them once they're properly dealt with?
-            using (var fs = new FileStream(replayPath, FileMode.Open, FileAccess.Read))
+            // go through all of the files inside the directory, make sure they're not executables, make sure they're valid, add them to a list of valid files, then parse them
+            if (!File.Exists(replayPath))
             {
-                // make sure it's not an executable
-                var reader = new BinaryReader(fs);
-                // Check 'MZ' signature
-                if (reader.ReadUInt16() != 0x5A4D) // 'MZ'
+                return Task.Run(() =>
                 {
-                    // Read the PE header offset
-                    fs.Seek(0x3C, SeekOrigin.Begin);
-                    int peHeaderOffset = reader.ReadInt32();
+                    Console.WriteLine("file doesn't exist.");
+                });
+            }
+            else
+            {
+                return Task.Run(() =>
+                {
+                    string gameID = "blahblah"; // get this once and then just copy it to the other entries..
 
-                    // Check 'PE\0\0' signature
-                    fs.Seek(peHeaderOffset, SeekOrigin.Begin);
-                    uint peSignature = reader.ReadUInt32();
-                    if (peSignature == 0x00004550) // 'PE\0\0'
+                    using (var fs = new FileStream(replayPath, FileMode.Open, FileAccess.Read))
                     {
-                        Console.WriteLine(replayPath + " is an executable.");
-                        // probably should move this to a folder for bad/errored files
-                        return false;
+                        // make sure it's not an executable
+                        var reader = new BinaryReader(fs);
+                        // Check 'MZ' signature
+                        if (reader.ReadUInt16() != 0x5A4D) // 'MZ'
+                        {
+                            // Read the PE header offset
+                            fs.Seek(0x3C, SeekOrigin.Begin);
+                            int peHeaderOffset = reader.ReadInt32();
+
+                            // Check 'PE\0\0' signature
+                            fs.Seek(peHeaderOffset, SeekOrigin.Begin);
+                            uint peSignature = reader.ReadUInt32();
+                            if (peSignature == 0x00004550) // 'PE\0\0'
+                            {
+                                Console.WriteLine(replayPath + " is an executable.");
+                                // probably should move this to a folder for bad/errored files
+                                File.Move(replayPath, badFilePath);
+                            }
+                        }
+                        else
+                        {
+                            // once it's valid, set up the list for the file
+                            var playerData = new List<PlayerData>();
+
+                            foreach (var player in playerData)
+                            {
+                                player.fID = gameID;
+                            }
+
+                            foreach (var line in 
+
+                            // 10 things to find
+                            // use fake iterator to determine which player to put data in
+
+
+                            ExportCSVData(csvPath, playerData);
+                        }
                     }
-                }
-
-				// once it's valid, set up the list for the file
-				var playerData = new List<PlayerData>();
-
-				foreach (var player in playerData)
-				{
-					player.fID = gameID;
-				}
-
-				return ExportCSVData(csvPath, playerData);
-
-			}
+                });
+            }
 		}
     }
 }

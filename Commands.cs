@@ -32,6 +32,7 @@ namespace RiftRumbleStats
         private ulong guildId;
 		public static readonly HttpClient fileclient = new HttpClient();
         private static string fileclientDir;
+        private static string csvPath;
 		//private IServiceProvider services;
 
 		/* Template for commands
@@ -140,7 +141,6 @@ namespace RiftRumbleStats
 					return;
 				}
 
-				string csvPath = fileclientDir + "test.csv";
                 //0) make sure we have a csv file to actually output stuff to
                 if (!File.Exists(csvPath))
                 {
@@ -214,18 +214,31 @@ namespace RiftRumbleStats
                     }
 				}
 			}
-			/*
+			
             public async Task LoadReplays()
             {
-            	pif (Context.Message.Author.Id != 102920670630916096)
+            	if (Context.Message.Author.Id != 102920670630916096)
 				{
 					Console.WriteLine("Not allowed to use replay commands.");
 					return;
 				}
-				// 4) check if they're valid
-				// 5) if invalid, move it to error folder otherwise do normal file checking and write to csv   
+                string badFileFolder = "badfiles";
+
+				Directory.CreateDirectory(fileclientDir + badFileFolder);
+				DirectoryInfo dir = new DirectoryInfo(fileclientDir);
+				FileInfo[] files = dir.GetFiles();
+
+				IList<Task> FileTaskList = new List<Task>();
+
+				int fCount = Directory.GetFiles(fileclientDir, "*.rofl", SearchOption.TopDirectoryOnly).Length;
+                for (int i = 0; i < fCount; i++)
+                {
+					FileTaskList.Add(RiftRumbleStats.FileHandling.LoadReplayFile(files[i].DirectoryName, csvPath, badFileFolder));
+
+				}
+
+				await Task.WhenAll(FileTaskList);
 			}
-            */
 		}
 
 		public async Task Client_Ready(DiscordSocketClient client)
@@ -273,6 +286,7 @@ namespace RiftRumbleStats
             _commands = commands;
             _client = client;
 			fileclientDir = filePath + "\\test\\";
+			csvPath = fileclientDir + "test.csv";
 		}
 
         public async Task InstallCommandsAsync()
