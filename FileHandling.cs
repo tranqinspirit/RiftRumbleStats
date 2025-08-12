@@ -1,4 +1,6 @@
-﻿using CsvHelper;
+﻿//#define SHEETBUILDDEBUG
+
+using CsvHelper;
 using CsvHelper.Configuration;
 using Discord.WebSocket;
 using System;
@@ -19,6 +21,7 @@ namespace RiftRumbleStats
 {
 	public partial class FileHandling
     {
+		private static readonly SemaphoreSlim fileLock = new SemaphoreSlim(1, 1);
 		public class PlayerData
         {
 			public string gameID {get; set;}
@@ -95,6 +98,8 @@ namespace RiftRumbleStats
 				Map(m => m.CHAMPIONS_KILLED).Name("Kills");
 				Map(m => m.NUM_DEATHS).Name("Deaths");
 				Map(m => m.ASSISTS).Name("Assists");
+				Map(m => m.TEAM).Name("Team");
+				Map(m => m.WIN).Name("Win/Loss");
 				Map(m => m.MINIONS_KILLED).Name("CS");
 				Map(m => m.GOLD_EARNED).Name("Gold Earned");
 			}
@@ -118,6 +123,9 @@ namespace RiftRumbleStats
 		}
 		public static Task LoadReplayFile(int batchCount, string replayPath, string csvPath, string badFilePath)
         {
+#if SHEETBUILDDEBUG 
+            Console.WriteLine("Queuing batchcount " + batchCount);
+#endif
             // go through all of the files inside the directory, make sure they're not executables, make sure they're valid, add them to a list of valid files, then parse them
             if (!File.Exists(replayPath))
             {
@@ -130,12 +138,15 @@ namespace RiftRumbleStats
             {
                 return Task.Run(async () =>
                 {
+                    await fileLock.WaitAsync();
                     try
                     {
+                        // Console.WriteLine("Starting batchcount: " + batchCount);
                         using (StreamReader fs = new StreamReader(replayPath))
                         {
-                            //Console.WriteLine("DEBUG: " + replayPath);
-                            
+#if SHEETBUILDDEBUG
+							Console.WriteLine("DEBUG: " + replayPath);
+#endif         
                             string fileBlob = fs.ReadToEnd();
                             int startIndex = fileBlob.IndexOf("\"gameLength\"");
 
@@ -182,15 +193,16 @@ namespace RiftRumbleStats
                                 p.gameID = gameID;
                                 p.gameLength = realgamelength;
                             }
-
-                            foreach (var p in players)
+#if SHEETBUILDDEBUG
+							foreach (var p in players)
                             {
-                                Console.WriteLine($"{p.RIOT_ID_GAME_NAME} ({p.SKIN}) " +
+                                Console.WriteLine("BatchCount: " + batchCount +
+                                    $"{p.RIOT_ID_GAME_NAME} ({p.SKIN}) " +
                                                     $"Kills: {p.CHAMPIONS_KILLED}, Deaths: {p.NUM_DEATHS}, Assists: {p.ASSISTS}, " +
                                                     $"Minions: {p.MINIONS_KILLED}, Gold: {p.GOLD_EARNED}, Team: {p.TEAM}, Win: {p.WIN}");
                             }
-
-                            // check if file is available or wait our turn until so
+#endif
+                            // check if file is available
                             while (true)
                             {
 								try
@@ -202,11 +214,9 @@ namespace RiftRumbleStats
 								}
 								catch (IOException)
 								{
-                                    await Task.Delay(1000);
+                                    await Task.Delay(2500);
 								}
 							}
-
-                            Console.WriteLine("Batch count: " + batchCount);
 
                             if (batchCount > 0)
                             {
@@ -216,7 +226,7 @@ namespace RiftRumbleStats
 									HasHeaderRecord = false,
 								};
 
-								using (var writer = new StreamWriter(csvPath))
+								using (var writer = new StreamWriter(csvPath, append: true))
 								using (var csvWrite = new CsvWriter(writer, config))
 								{
                                     csvWrite.Context.RegisterClassMap<SheetMap>();
@@ -226,7 +236,7 @@ namespace RiftRumbleStats
 							}
                             else
                             {
-								using (var writer = new StreamWriter(csvPath))
+								using (var writer = new StreamWriter(csvPath, append: true))
 								using (var csvWrite = new CsvWriter(writer, CultureInfo.InvariantCulture))
 								{
 									csvWrite.Context.RegisterClassMap<SheetMap>();
@@ -235,8 +245,11 @@ namespace RiftRumbleStats
 								}
 							}
 						}
-                        Console.WriteLine("Done with " + replayPath);
-					}
+                        fileLock.Release();
+#if SHEETBUILDDEBUG
+						Console.WriteLine("Done with " + replayPath);
+#endif
+                    }
 					catch (JsonException ex)
 					{
 						Console.WriteLine($"JSON Parsing error: {ex.Message}");
