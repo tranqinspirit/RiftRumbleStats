@@ -17,13 +17,12 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace RiftRumbleStats
 {
 	public partial class FileHandling
     {
-		//private static readonly SemaphoreSlim fileLock = new SemaphoreSlim(1, 1);
+		private static readonly SemaphoreSlim csvReportLock = new SemaphoreSlim(1, 1);
 		public class PlayerData
         {
 			public string gameID {get; set;}
@@ -217,8 +216,7 @@ namespace RiftRumbleStats
 								csvWrite.Flush();
 							}
 						}
-                        //fileLock.Release();
-                        //System.IO.File.Move(replayPath, replayPath + "done");
+
 #if SHEETBUILDDEBUG
 						Console.WriteLine("Done with " + replayPath);
 #endif
@@ -238,5 +236,97 @@ namespace RiftRumbleStats
 				});
             }
 		}
-    }
+
+        public static Task BatchReport(string replayDir, string csvFile)
+        {
+			if (!File.Exists(csvFile))
+            {
+                return Task.Run(() =>
+                {
+                    Console.WriteLine("file doesn't exist.");
+                });
+            }
+            else
+            {
+                return Task.Run(async () =>
+                {
+                    await csvReportLock.WaitAsync();
+                    try
+                    {
+                        bool firstRun = true;
+                        string outputFile = replayDir + "BatchReport" + DateTime.Now.ToString("M-d-yyyy") + ".csv";
+
+                        if (File.Exists(outputFile))
+                        {
+                            firstRun = false;
+                        }
+                        else
+                        {
+                            try
+                            {
+                                File.Create(outputFile).Dispose();
+                            }
+                            catch (IOException ex)
+                            {
+                                Console.WriteLine("File Creation ex: " + ex.Message);
+                                return;
+                            }
+                        }
+
+						try
+                        {
+							Console.WriteLine("Opening: " + csvFile);
+
+                            try
+                            {
+								CsvConfiguration config = new CsvConfiguration(CultureInfo.InvariantCulture)
+								{
+									HasHeaderRecord = firstRun,
+								};
+
+								using (var reader = new StreamReader(csvFile))
+                                using (var csvRead = new CsvReader(reader, config))
+								using (var writer = new StreamWriter(outputFile, append: true))
+								using (var csvWrite = new CsvWriter(writer, config))
+								{
+                                    csvRead.Context.RegisterClassMap<SheetMap>();
+                                    csvWrite.Context.RegisterClassMap<SheetMap>();
+                                    
+                                    var inputRecords = csvRead.GetRecords<PlayerData>();
+
+                                    foreach (var record in inputRecords)
+                                    {
+                                        csvWrite.WriteRecords(inputRecords);
+                                        csvWrite.NextRecord();
+                                    }
+									csvWrite.Flush();
+								}
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("Read/write run " + ex.Message);
+                                await Task.Delay(2000);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("Main try Exception");
+                            Console.WriteLine(ex.Message);
+						}
+					}
+                    catch (IOException)
+                    {
+                        Console.WriteLine("outer IOexception");
+                        await Task.Delay(2000);
+                    }
+                    catch (Exception ex)
+                    {
+						Console.WriteLine("outer exception" + ex.Message);
+                    }
+
+					csvReportLock.Release();
+				});
+            }
+		}
+	}
 }

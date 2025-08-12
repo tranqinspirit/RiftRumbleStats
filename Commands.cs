@@ -223,20 +223,62 @@ namespace RiftRumbleStats
 				DirectoryInfo dir = new DirectoryInfo(fileclientDir);
 				FileInfo[] files = dir.GetFiles();
 
-				IList<Task> FileTaskList = new List<Task>();
-
 				int fCount = Directory.GetFiles(fileclientDir, "*.rofl", SearchOption.TopDirectoryOnly).Length;
-                for (int i = 0; i < fCount; i++)
-                {
-					FileTaskList.Add(RiftRumbleStats.FileHandling.LoadReplayFile(i, fileclientDir, files[i].ToString()));
-				}
 
                 if (fCount == 0)
                 {
                     Console.WriteLine("No replays to process.");
+                    await ReplyAsync("No replays to process.");
                 }
-				await Context.Message.AddReactionsAsync([yesreact]);
-				await Task.WhenAll(FileTaskList);
+                else
+                {
+					IList<Task> FileTaskList = new List<Task>();
+
+					for (int i = 0; i < fCount; i++)
+                    {
+                        FileTaskList.Add(RiftRumbleStats.FileHandling.LoadReplayFile(fileclientDir, files[i].ToString()));
+                    }
+
+                    await Context.Message.AddReactionsAsync([yesreact]);
+                    await Task.WhenAll(FileTaskList);
+                }
+			}
+            [Command("batchreport")]
+            public async Task BatchReport()
+            {
+				if (Context.Message.Author.Id != 102920670630916096)
+				{
+					Console.WriteLine("Not allowed to use replay commands.");
+					return;
+				}
+
+				var regex = new Regex(@"^NA1-\d+\.csv$", RegexOptions.IgnoreCase);
+
+				var files = Directory
+					.EnumerateFiles(fileclientDir, "*.csv", SearchOption.TopDirectoryOnly)
+					.Where(f => regex.IsMatch(Path.GetFileName(f)))
+					.ToList();
+
+				int fCount = Directory.GetFiles(fileclientDir, "*.csv", SearchOption.TopDirectoryOnly).Length;
+
+                if (fCount == 0)
+                {
+                    Console.WriteLine("No replays to process.");
+                    await ReplyAsync("No replays to process.");
+                }
+                else
+                {
+					IList<Task> FileTaskList = new List<Task>();
+
+					for (int i = 0; i < fCount; i++)
+					{
+                        Console.WriteLine("batchreport file found debug: " + files[i].ToString());
+						FileTaskList.Add(RiftRumbleStats.FileHandling.BatchReport(fileclientDir, files[i].ToString()));
+					}
+
+					await Context.Message.AddReactionsAsync([yesreact]);
+					await Task.WhenAll(FileTaskList);
+				}
 			}
 		}
 
