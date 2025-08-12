@@ -19,7 +19,9 @@ namespace RiftRumbleStats
     {
         private static DiscordSocketClient _client;
         private static CommandService _commands;
-        private static Task Log(LogMessage msg)
+		public static string fileDir = "";
+
+		private static Task Log(LogMessage msg)
         {
             Console.WriteLine(msg.ToString());
             return Task.CompletedTask;

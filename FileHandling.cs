@@ -1,35 +1,45 @@
-﻿using Discord.WebSocket;
+﻿using CsvHelper;
+using CsvHelper.Configuration;
+using Discord.WebSocket;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using CsvHelper;
-using System.Globalization;
 using System.Reflection.Metadata.Ecma335;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace RiftRumbleStats
 {
-    public partial class FileHandling
+	public partial class FileHandling
     {
-        public class PlayerData
+		public class PlayerData
         {
-			public string fID { get; set; }
-			public string gameLength { get; set; } // {"gameLength":milliseconds,
-			public string playerName { get; set; }          //  \"RIOT_ID_GAME_NAME\":\"name\"
-            public string playerChampion { get; set; }      // \"SKIN\":\"champ\",
-            public string playerKillCount { get; set; }     // \"CHAMPIONS_KILLED\":\"count\"
-            public string playerDeathCount { get; set; }    // \"NUM_DEATHS\":\"count\",
-            public string playerAssistCount { get; set; }   // \"ASSISTS\":\"count\",
-            public string playerTeam { get; set; }          //\"TEAM\":\"100 (red) 200 (blue)\",
-            public string playerWinLose { get; set; }        // \"WIN\":\"Win/Fail\"  
-            public string playerCreepScore { get; set; }    //  \"MINIONS_KILLED\":\"54\"
-            public string playerGoldIncome { get; set; }    // \"GOLD_EARNED\":\"count\"
+			public string gameID {get; set;}
+            public string gameLength { get; set; }
+			public string RIOT_ID_GAME_NAME { get; set; }  // name
+            public string SKIN { get; set; }      // champ
+            public string CHAMPIONS_KILLED { get; set; }  //count
+            public string NUM_DEATHS { get; set; }  // count
+            public string ASSISTS { get; set; }   // count
+            public string TEAM { get; set; }  //100 (red) 200 (blue)
+            public string WIN { get; set; }  // Win/Fail  
+            public string MINIONS_KILLED { get; set; }   // count
+            public string GOLD_EARNED { get; set; }    // count
         }
 
-        public static int CheckFileExtDiscord(SocketUserMessage msg)
+		public class GameData
+        {
+            public long gameLength { get; set; } // {"gameLength":milliseconds,
+            public string statsJson { get; set; }
+		}
+		public static int CheckFileExtDiscord(SocketUserMessage msg)
         {
             if (msg.Attachments.Count > 0)
             {
@@ -74,16 +84,39 @@ namespace RiftRumbleStats
             }
         }
 
-        public static void ExportCSVData(string csvPath, List<PlayerData> data)
+        public sealed class SheetMap : ClassMap<PlayerData>
         {
-            using (var writer = new StreamWriter(csvPath))
-            using (var csvWrite = new CsvWriter(writer, CultureInfo.InvariantCulture))
+            public SheetMap()
             {
-                csvWrite.WriteRecords(data);
-                csvWrite.Flush();
-            }
+				Map(m => m.gameID).Name("Game ID");
+				Map(m => m.gameLength).Name("Game Length");
+				Map(m => m.RIOT_ID_GAME_NAME).Name("Player");
+				Map(m => m.SKIN).Name("Champion");
+				Map(m => m.CHAMPIONS_KILLED).Name("Kills");
+				Map(m => m.NUM_DEATHS).Name("Deaths");
+				Map(m => m.ASSISTS).Name("Assists");
+				Map(m => m.MINIONS_KILLED).Name("CS");
+				Map(m => m.GOLD_EARNED).Name("Gold Earned");
+			}
         }
-		public static Task LoadReplayFile(string replayPath, string csvPath, string badFilePath)
+
+		public static string FormatDuration(long milliseconds)
+		{
+			TimeSpan time = TimeSpan.FromMilliseconds(milliseconds);
+			int hours = time.Hours;
+			int minutes = time.Minutes;
+			int seconds = time.Seconds;
+
+			if (time.TotalHours >= 1)
+			{
+				return $"{hours}h {minutes}m {seconds}s";
+			}
+			else
+			{
+				return $"{minutes}m {seconds}s";
+			}
+		}
+		public static Task LoadReplayFile(int batchCount, string replayPath, string csvPath, string badFilePath)
         {
             // go through all of the files inside the directory, make sure they're not executables, make sure they're valid, add them to a list of valid files, then parse them
             if (!File.Exists(replayPath))
@@ -95,51 +128,128 @@ namespace RiftRumbleStats
             }
             else
             {
-                return Task.Run(() =>
+                return Task.Run(async () =>
                 {
-                    string gameID = "blahblah"; // get this once and then just copy it to the other entries..
-
-                    using (var fs = new FileStream(replayPath, FileMode.Open, FileAccess.Read))
+                    try
                     {
-                        // make sure it's not an executable
-                        var reader = new BinaryReader(fs);
-                        // Check 'MZ' signature
-                        if (reader.ReadUInt16() != 0x5A4D) // 'MZ'
+                        using (StreamReader fs = new StreamReader(replayPath))
                         {
-                            // Read the PE header offset
-                            fs.Seek(0x3C, SeekOrigin.Begin);
-                            int peHeaderOffset = reader.ReadInt32();
+                            //Console.WriteLine("DEBUG: " + replayPath);
+                            
+                            string fileBlob = fs.ReadToEnd();
+                            int startIndex = fileBlob.IndexOf("\"gameLength\"");
 
-                            // Check 'PE\0\0' signature
-                            fs.Seek(peHeaderOffset, SeekOrigin.Begin);
-                            uint peSignature = reader.ReadUInt32();
-                            if (peSignature == 0x00004550) // 'PE\0\0'
+                            if (startIndex == -1)
                             {
-                                Console.WriteLine(replayPath + " is an executable.");
-                                // probably should move this to a folder for bad/errored files
-                                File.Move(replayPath, badFilePath);
-                            }
-                        }
-                        else
-                        {
-                            // once it's valid, set up the list for the file
-                            var playerData = new List<PlayerData>();
-
-                            foreach (var player in playerData)
-                            {
-                                player.fID = gameID;
+                                Console.WriteLine("Start of data invalid.");
+                                return;
                             }
 
-                            foreach (var line in 
+                            fileBlob = "{" + fileBlob.Substring(startIndex);
+                            // rofl files have junk at the end of the file..
+                            int lastBrace = fileBlob.LastIndexOf("}");
 
-                            // 10 things to find
-                            // use fake iterator to determine which player to put data in
+                            if (lastBrace == -1)
+                            {
+                                Console.WriteLine("End of file invalid");
+                                return;
+                            }
 
+                            fileBlob = fileBlob.Substring(0, lastBrace+1);
 
-                            ExportCSVData(csvPath, playerData);
-                        }
-                    }
-                });
+							GameData gameData = JsonSerializer.Deserialize<GameData>(fileBlob);
+                            string gameID = Path.GetFileNameWithoutExtension(replayPath);
+
+                            // double check just to be sure
+                            if (gameData == null)
+                            {
+                                Console.WriteLine("messed up sorting out the end");
+                                return;
+                            }
+
+                            var players = JsonSerializer.Deserialize<List<PlayerData>>(gameData.statsJson);
+                            if (players == null)
+                            {
+                                Console.WriteLine("something went really wrong here");
+                                return;
+                            }
+
+                            string realgamelength = FormatDuration(gameData.gameLength);
+
+							// Add in the per game data fields
+							foreach (var p in players)
+                            {
+                                p.gameID = gameID;
+                                p.gameLength = realgamelength;
+                            }
+
+                            foreach (var p in players)
+                            {
+                                Console.WriteLine($"{p.RIOT_ID_GAME_NAME} ({p.SKIN}) " +
+                                                    $"Kills: {p.CHAMPIONS_KILLED}, Deaths: {p.NUM_DEATHS}, Assists: {p.ASSISTS}, " +
+                                                    $"Minions: {p.MINIONS_KILLED}, Gold: {p.GOLD_EARNED}, Team: {p.TEAM}, Win: {p.WIN}");
+                            }
+
+                            // check if file is available or wait our turn until so
+                            while (true)
+                            {
+								try
+								{
+                                    using (FileStream stream = File.Open(csvPath, FileMode.Open, FileAccess.Read, FileShare.None))
+                                    {
+                                        break;
+                                    }
+								}
+								catch (IOException)
+								{
+                                    await Task.Delay(1000);
+								}
+							}
+
+                            Console.WriteLine("Batch count: " + batchCount);
+
+                            if (batchCount > 0)
+                            {
+								var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+								{
+									// Don't write the header again.
+									HasHeaderRecord = false,
+								};
+
+								using (var writer = new StreamWriter(csvPath))
+								using (var csvWrite = new CsvWriter(writer, config))
+								{
+                                    csvWrite.Context.RegisterClassMap<SheetMap>();
+									csvWrite.WriteRecords(players);
+									csvWrite.Flush();
+								}
+							}
+                            else
+                            {
+								using (var writer = new StreamWriter(csvPath))
+								using (var csvWrite = new CsvWriter(writer, CultureInfo.InvariantCulture))
+								{
+									csvWrite.Context.RegisterClassMap<SheetMap>();
+									csvWrite.WriteRecords(players);
+									csvWrite.Flush();
+								}
+							}
+						}
+                        Console.WriteLine("Done with " + replayPath);
+					}
+					catch (JsonException ex)
+					{
+						Console.WriteLine($"JSON Parsing error: {ex.Message}");
+					}
+					catch (IOException ex)
+					{
+						Console.WriteLine($"File IO error: {ex.Message}");
+					}
+					catch (Exception ex)
+					{
+						Console.WriteLine($"Unexpected error: {ex.Message}");
+					}
+				});
             }
 		}
     }

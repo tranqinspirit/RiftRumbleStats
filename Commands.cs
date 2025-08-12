@@ -142,6 +142,7 @@ namespace RiftRumbleStats
 				}
 
                 //0) make sure we have a csv file to actually output stuff to
+                // TODO: this should actually just be generated after getting all the stuff together, then create a new file/report
                 if (!File.Exists(csvPath))
                 {
                     await ReplyAsync("Couldn't find csv file.");
@@ -167,7 +168,7 @@ namespace RiftRumbleStats
                         }
                         else
                         {
-							await Context.Message.AddReactionsAsync([yesreact]);
+							await Context.Message.AddReactionsAsync([yesreact]);  
 						}
                             					
                         foreach (IAttachment attachment in x.Attachments)
@@ -189,7 +190,9 @@ namespace RiftRumbleStats
                         }
 					}
 
-                    if (urlArray.Count() > 0)
+					await ReplyAsync("Found " + fileNameList.Count() + " files.");
+
+					if (urlArray.Count() > 0)
                     {
                         try
                         {
@@ -214,7 +217,7 @@ namespace RiftRumbleStats
                     }
 				}
 			}
-			
+			[Command("loadreplays")]
             public async Task LoadReplays()
             {
             	if (Context.Message.Author.Id != 102920670630916096)
@@ -233,11 +236,11 @@ namespace RiftRumbleStats
 				int fCount = Directory.GetFiles(fileclientDir, "*.rofl", SearchOption.TopDirectoryOnly).Length;
                 for (int i = 0; i < fCount; i++)
                 {
-					FileTaskList.Add(RiftRumbleStats.FileHandling.LoadReplayFile(files[i].DirectoryName, csvPath, badFileFolder));
-
+					FileTaskList.Add(RiftRumbleStats.FileHandling.LoadReplayFile(i, files[i].ToString(), csvPath, badFileFolder));
 				}
 
 				await Task.WhenAll(FileTaskList);
+                await ReplyAsync("Done with file batch.");
 			}
 		}
 
@@ -285,8 +288,8 @@ namespace RiftRumbleStats
         {
             _commands = commands;
             _client = client;
-			fileclientDir = filePath + "\\test\\";
-			csvPath = fileclientDir + "test.csv";
+			fileclientDir = filePath + "test";
+			csvPath = fileclientDir + "\\test.csv";
 		}
 
         public async Task InstallCommandsAsync()
