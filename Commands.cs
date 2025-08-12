@@ -268,18 +268,22 @@ namespace RiftRumbleStats
                 }
                 else
                 {
-					IList<Task> FileTaskList = new List<Task>();
+                    var channel = Context.Channel;
+                    IList<Task> FileTaskList = new List<Task>();
 
 					for (int i = 0; i < fCount; i++)
 					{
-                        Console.WriteLine("batchreport file found debug: " + files[i].ToString());
+                        //Console.WriteLine("batchreport file found debug: " + files[i].ToString());
 						FileTaskList.Add(RiftRumbleStats.FileHandling.BatchReport(fileclientDir, files[i].ToString()));
 					}
 
 					await Context.Message.AddReactionsAsync([yesreact]);
-					await Task.WhenAll(FileTaskList);
+                    await Task.WhenAll(FileTaskList);
+
+					string outputFile = fileclientDir + "BatchReport" + DateTime.Now.ToString("M-d-yyyy") + ".csv";
+                    await channel.SendFileAsync(outputFile);
 				}
-			}
+            }
 		}
 
 		public async Task Client_Ready(DiscordSocketClient client)

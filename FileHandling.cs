@@ -275,7 +275,7 @@ namespace RiftRumbleStats
 
 						try
                         {
-							Console.WriteLine("Opening: " + csvFile);
+							//Console.WriteLine("Opening: " + csvFile);
 
                             try
                             {
