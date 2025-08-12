@@ -63,7 +63,7 @@ namespace RiftRumbleStats
                 // Blocks the task until the program closes.
                 await Task.Delay(-1);
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 Console.WriteLine("Couldn't find token. Exiting.");
                 return;

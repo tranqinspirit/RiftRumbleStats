@@ -123,11 +123,8 @@ namespace RiftRumbleStats
 				return $"{minutes}m {seconds}s";
 			}
 		}
-		public static Task LoadReplayFile(int batchCount, string replayDir, string replayFile)
-        {
-#if SHEETBUILDDEBUG 
-            Console.WriteLine("Queuing batchcount " + batchCount);
-#endif
+		public static Task LoadReplayFile(string replayDir, string replayFile)
+		{
             // go through all of the files inside the directory, make sure they're not executables, make sure they're valid, add them to a list of valid files, then parse them
             if (!File.Exists(replayFile))
             {
@@ -148,7 +145,7 @@ namespace RiftRumbleStats
                         {
 #if SHEETBUILDDEBUG
 							Console.WriteLine("DEBUG: " + replayPath);
-#endif         
+#endif
                             string fileBlob = fs.ReadToEnd();
                             int startIndex = fileBlob.IndexOf("\"gameLength\"");
 
@@ -205,15 +202,14 @@ namespace RiftRumbleStats
 #if SHEETBUILDDEBUG
 							foreach (var p in players)
                             {
-                                Console.WriteLine("BatchCount: " + batchCount +
-                                    $"{p.RIOT_ID_GAME_NAME} ({p.SKIN}) " +
+                                Console.WriteLine($"{p.RIOT_ID_GAME_NAME} ({p.SKIN}) " +
                                                     $"Kills: {p.CHAMPIONS_KILLED}, Deaths: {p.NUM_DEATHS}, Assists: {p.ASSISTS}, " +
                                                     $"Minions: {p.MINIONS_KILLED}, Gold: {p.GOLD_EARNED}, Team: {p.TEAM}, Win: {p.WIN}");
                             }
 #endif
 
                             File.Create(outputName).Dispose();
-							using (var writer = new StreamWriter(outputName))
+							using (var writer = new StreamWriter(outputName, append: false)) // set append to true if we are adding stuff to the same file / dealing with concurrency
 							using (var csvWrite = new CsvWriter(writer, CultureInfo.InvariantCulture))
 							{
 								csvWrite.Context.RegisterClassMap<SheetMap>();

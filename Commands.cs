@@ -27,7 +27,6 @@ namespace RiftRumbleStats
     {
         private readonly DiscordSocketClient _client;
         private readonly CommandService _commands;
-        private static FileHandling _filehandling;
         public static IEmote yesreact = new Emoji("✅");
         public static IEmote noreact = new Emoji("⛔");
         private ulong guildId;
