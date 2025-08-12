@@ -33,8 +33,6 @@ namespace RiftRumbleStats
         private ulong guildId;
 		public static readonly HttpClient fileclient = new HttpClient();
         private static string fileclientDir;
-        private static string csvPath;
-		//private IServiceProvider services;
 
 		/* Template for commands
         // OPTIONAL: [GROUP("<name>"] // adds command parameters in the sent message
@@ -141,80 +139,76 @@ namespace RiftRumbleStats
 					Console.WriteLine("Not allowed to use replay commands.");
 					return;
 				}
-
-                //0) make sure we have a csv file to actually output stuff to
-                // TODO: this should actually just be generated after getting all the stuff together, then create a new file/report
-                if (!File.Exists(csvPath))
-                {
-                    await ReplyAsync("Couldn't find csv file.");
-                }
-                else
-                {
-                    List<string> fileNameList = [];
-					List<string> urlArray = [];
-					var messages = await Context.Message.Channel.GetMessagesAsync(messageCount + 1).FlattenAsync();
-					foreach (var x in messages)
-					{
-                        if (x.Reactions.Values.Count() > 0)
+               
+                List<string> fileNameList = [];
+				List<string> urlArray = [];
+				var messages = await Context.Message.Channel.GetMessagesAsync(messageCount + 1).FlattenAsync();
+				foreach (var x in messages)
+				{
+                    if (x.Reactions.Values.Count() > 0)
+                    {
+                        foreach (var y in x.Reactions.Values)
                         {
-
-                            foreach (var y in x.Reactions.Values)
+                            if (!y.IsMe)
                             {
-                                if (!y.IsMe)
-                                {
-                                    await Context.Message.AddReactionsAsync([yesreact]);
-                                }
-
+                                await Context.Message.AddReactionsAsync([yesreact]);
                             }
                         }
-                        else
-                        {
-							await Context.Message.AddReactionsAsync([yesreact]);  
-						}
-                            					
-                        foreach (IAttachment attachment in x.Attachments)
-                        {
-                            var fileType = attachment.ContentType;
-                            if (fileType == null)
-                            {
-                                var roflTrim = attachment.Filename;
-								Match match = Regex.Match(roflTrim, @"\.rofl\b");
-								string fixString = match.ToString();
-								fixString = fixString.TrimStart('{');
-								fixString = fixString.TrimEnd('}');
-                                if (fixString.Equals(".rofl"))
-                                {
-									urlArray.Add(attachment.Url);
-                                    fileNameList.Add(attachment.Filename);
-								}
-							}						
-                        }
-					}
-
-					await ReplyAsync("Found " + fileNameList.Count() + " files.");
-
-					if (urlArray.Count() > 0)
+                    }
+                    else
                     {
-                        try
+						await Context.Message.AddReactionsAsync([yesreact]);  
+					}
+                            					
+                    foreach (IAttachment attachment in x.Attachments)
+                    {
+                        var fileType = attachment.ContentType;
+                        if (fileType == null)
                         {
-                            foreach (var x in urlArray.Select((value, i) => new { i, value }))
+                            var roflTrim = attachment.Filename;
+							Match match = Regex.Match(roflTrim, @"\.rofl\b");
+							string fixString = match.ToString();
+							fixString = fixString.TrimStart('{');
+							fixString = fixString.TrimEnd('}');
+                            if (fixString.Equals(".rofl"))
                             {
-                                var url = x.value;
-                                var index = x.i;
-                                using (var s = await fileclient.GetStreamAsync(url))
+								urlArray.Add(attachment.Url);
+                                fileNameList.Add(attachment.Filename);
+							}
+						}						
+                    }
+				}
+
+				//await ReplyAsync("Found " + fileNameList.Count() + " files.");
+
+				if (urlArray.Count() > 0)
+                {
+                    try
+                    {
+                        foreach (var x in urlArray.Select((value, i) => new { i, value }))
+                        {
+                            var url = x.value;
+                            var index = x.i;
+                            using (var s = await fileclient.GetStreamAsync(url))
+                            {
+                                try
                                 {
                                     using var fs = new FileStream(fileclientDir + fileNameList[index], FileMode.CreateNew);
-
-									{
-                                        await s.CopyToAsync(fs);
+                                    {
+                                        Console.WriteLine("Creating file: " + fileclientDir + fileNameList[index]);
+										await s.CopyToAsync(fs);
                                     }
                                 }
+                                catch (IOException ex)
+                                {
+									Console.WriteLine($"File IO error: {ex.Message}");
+								}
                             }
                         }
-                        catch (HttpRequestException e)
-                        {
-                            Console.WriteLine($"Error: {e.Message}");
-                        }
+                    }
+                    catch (HttpRequestException e)
+                    {
+                        Console.WriteLine($"Error: {e.Message}");
                     }
 				}
 			}
@@ -226,9 +220,7 @@ namespace RiftRumbleStats
 					Console.WriteLine("Not allowed to use replay commands.");
 					return;
 				}
-                string badFileFolder = "badfiles";
 
-				Directory.CreateDirectory(fileclientDir + badFileFolder);
 				DirectoryInfo dir = new DirectoryInfo(fileclientDir);
 				FileInfo[] files = dir.GetFiles();
 
@@ -237,11 +229,15 @@ namespace RiftRumbleStats
 				int fCount = Directory.GetFiles(fileclientDir, "*.rofl", SearchOption.TopDirectoryOnly).Length;
                 for (int i = 0; i < fCount; i++)
                 {
-					FileTaskList.Add(RiftRumbleStats.FileHandling.LoadReplayFile(i, files[i].ToString(), csvPath, badFileFolder));
+					FileTaskList.Add(RiftRumbleStats.FileHandling.LoadReplayFile(i, fileclientDir, files[i].ToString()));
 				}
 
+                if (fCount == 0)
+                {
+                    Console.WriteLine("No replays to process.");
+                }
+				await Context.Message.AddReactionsAsync([yesreact]);
 				await Task.WhenAll(FileTaskList);
-                await ReplyAsync("Done with file batch.");
 			}
 		}
 
@@ -289,8 +285,7 @@ namespace RiftRumbleStats
         {
             _commands = commands;
             _client = client;
-			fileclientDir = filePath + "test";
-			csvPath = fileclientDir + "\\test.csv";
+			fileclientDir = filePath + "test\\";
 		}
 
         public async Task InstallCommandsAsync()

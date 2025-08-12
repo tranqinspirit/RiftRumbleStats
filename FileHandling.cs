@@ -2,9 +2,11 @@
 
 using CsvHelper;
 using CsvHelper.Configuration;
+using CsvHelper.Configuration.Attributes;
 using Discord.WebSocket;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Eventing.Reader;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -21,7 +23,7 @@ namespace RiftRumbleStats
 {
 	public partial class FileHandling
     {
-		private static readonly SemaphoreSlim fileLock = new SemaphoreSlim(1, 1);
+		//private static readonly SemaphoreSlim fileLock = new SemaphoreSlim(1, 1);
 		public class PlayerData
         {
 			public string gameID {get; set;}
@@ -121,13 +123,13 @@ namespace RiftRumbleStats
 				return $"{minutes}m {seconds}s";
 			}
 		}
-		public static Task LoadReplayFile(int batchCount, string replayPath, string csvPath, string badFilePath)
+		public static Task LoadReplayFile(int batchCount, string replayDir, string replayFile)
         {
 #if SHEETBUILDDEBUG 
             Console.WriteLine("Queuing batchcount " + batchCount);
 #endif
             // go through all of the files inside the directory, make sure they're not executables, make sure they're valid, add them to a list of valid files, then parse them
-            if (!File.Exists(replayPath))
+            if (!File.Exists(replayFile))
             {
                 return Task.Run(() =>
                 {
@@ -138,11 +140,11 @@ namespace RiftRumbleStats
             {
                 return Task.Run(async () =>
                 {
-                    await fileLock.WaitAsync();
+                    //await fileLock.WaitAsync();
                     try
                     {
                         // Console.WriteLine("Starting batchcount: " + batchCount);
-                        using (StreamReader fs = new StreamReader(replayPath))
+                        using (StreamReader fs = new StreamReader(replayFile))
                         {
 #if SHEETBUILDDEBUG
 							Console.WriteLine("DEBUG: " + replayPath);
@@ -169,7 +171,7 @@ namespace RiftRumbleStats
                             fileBlob = fileBlob.Substring(0, lastBrace+1);
 
 							GameData gameData = JsonSerializer.Deserialize<GameData>(fileBlob);
-                            string gameID = Path.GetFileNameWithoutExtension(replayPath);
+                            string gameID = Path.GetFileNameWithoutExtension(replayFile);
 
                             // double check just to be sure
                             if (gameData == null)
@@ -187,12 +189,19 @@ namespace RiftRumbleStats
 
                             string realgamelength = FormatDuration(gameData.gameLength);
 
-							// Add in the per game data fields
+							// Add in the per game data fields and clean up naming scheme from Riot
 							foreach (var p in players)
                             {
                                 p.gameID = gameID;
                                 p.gameLength = realgamelength;
-                            }
+                                if (p.TEAM == "100") p.TEAM = "RED";
+                                else                 p.TEAM = "BLUE";
+
+                                if (p.WIN == "Fail") p.WIN = "Loss";
+
+							}
+
+                            string outputName = replayDir + gameID + ".csv";
 #if SHEETBUILDDEBUG
 							foreach (var p in players)
                             {
@@ -202,50 +211,18 @@ namespace RiftRumbleStats
                                                     $"Minions: {p.MINIONS_KILLED}, Gold: {p.GOLD_EARNED}, Team: {p.TEAM}, Win: {p.WIN}");
                             }
 #endif
-                            // check if file is available
-                            while (true)
-                            {
-								try
-								{
-                                    using (FileStream stream = File.Open(csvPath, FileMode.Open, FileAccess.Read, FileShare.None))
-                                    {
-                                        break;
-                                    }
-								}
-								catch (IOException)
-								{
-                                    await Task.Delay(2500);
-								}
-							}
 
-                            if (batchCount > 0)
-                            {
-								var config = new CsvConfiguration(CultureInfo.InvariantCulture)
-								{
-									// Don't write the header again.
-									HasHeaderRecord = false,
-								};
-
-								using (var writer = new StreamWriter(csvPath, append: true))
-								using (var csvWrite = new CsvWriter(writer, config))
-								{
-                                    csvWrite.Context.RegisterClassMap<SheetMap>();
-									csvWrite.WriteRecords(players);
-									csvWrite.Flush();
-								}
-							}
-                            else
-                            {
-								using (var writer = new StreamWriter(csvPath, append: true))
-								using (var csvWrite = new CsvWriter(writer, CultureInfo.InvariantCulture))
-								{
-									csvWrite.Context.RegisterClassMap<SheetMap>();
-									csvWrite.WriteRecords(players);
-									csvWrite.Flush();
-								}
+                            File.Create(outputName).Dispose();
+							using (var writer = new StreamWriter(outputName))
+							using (var csvWrite = new CsvWriter(writer, CultureInfo.InvariantCulture))
+							{
+								csvWrite.Context.RegisterClassMap<SheetMap>();
+								csvWrite.WriteRecords(players);
+								csvWrite.Flush();
 							}
 						}
-                        fileLock.Release();
+                        //fileLock.Release();
+                        //System.IO.File.Move(replayPath, replayPath + "done");
 #if SHEETBUILDDEBUG
 						Console.WriteLine("Done with " + replayPath);
 #endif
