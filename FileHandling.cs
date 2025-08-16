@@ -74,30 +74,6 @@ namespace RiftRumbleStats
             }
             return 0;
         }
-
-        public static bool IsWindowsEXE(string path)
-        {
-            if (!File.Exists(path))
-                return false;
-
-            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))
-            {
-                var reader = new BinaryReader(fs);
-                // Check 'MZ' signature
-                if (reader.ReadUInt16() != 0x5A4D) // 'MZ'
-                    return false;
-
-                // Read the PE header offset
-                fs.Seek(0x3C, SeekOrigin.Begin);
-                int peHeaderOffset = reader.ReadInt32();
-
-                // Check 'PE\0\0' signature
-                fs.Seek(peHeaderOffset, SeekOrigin.Begin);
-                uint peSignature = reader.ReadUInt32();
-                return peSignature == 0x00004550; // 'PE\0\0'
-            }
-        }
-
         public sealed class SheetMap : ClassMap<PlayerData>
         {
             public SheetMap()
