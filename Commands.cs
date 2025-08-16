@@ -284,6 +284,78 @@ namespace RiftRumbleStats
                     }
                 }
             }
+
+			[Command("memorybatchreport")]
+			public async Task MemoryBatchReport(int messageCount)
+			{
+				ulong[] allowedUsers = { 102920670630916096 }; // this should be set up globablly somehow
+				ulong curUser = Context.Message.Author.Id;
+
+				foreach (var user in allowedUsers)
+				{
+					if (!user.Equals(curUser))
+					{
+						Console.WriteLine("Not allowed to use replay commands.");
+						return;
+					}
+				}
+
+				var streams = new List<MemoryStream>();
+				using var httpClient = new HttpClient();
+				var messages = await Context.Message.Channel.GetMessagesAsync(messageCount + 1).FlattenAsync();
+
+				foreach (var x in messages)
+				{
+					if (x.Reactions.Values.Count() > 0)
+					{
+						foreach (var y in x.Reactions.Values)
+						{
+							if (!y.IsMe)
+							{
+								await Context.Message.AddReactionsAsync([yesreact]);
+							}
+						}
+					}
+					else
+					{
+						await Context.Message.AddReactionsAsync([yesreact]);
+					}
+
+					foreach (IAttachment attachment in x.Attachments)
+					{
+						var fileType = attachment.ContentType;
+						if (fileType == null)
+						{
+							var roflTrim = attachment.Filename;
+							Match match = Regex.Match(roflTrim, @"\.rofl\b");
+							string fixString = match.ToString();
+							fixString = fixString.TrimStart('{');
+							fixString = fixString.TrimEnd('}');
+							if (fixString.Equals(".rofl"))
+							{
+								var bytes = await httpClient.GetByteArrayAsync(attachment.Url);
+								streams.Add(new MemoryStream(bytes));
+							}
+						}
+					}
+				}
+
+				// do JSON parsing
+				// do CSV parsing
+
+				// do stuff with the streams
+				var TaskList = streams.Select(streams =>
+
+
+
+				// process them into lists
+				// probably do some validating with gameid stuff
+				// spit out the file
+
+
+				await Task.WhenAll(TaskList);
+			}
+
 		}
 
 		public async Task Client_Ready(DiscordSocketClient client)
