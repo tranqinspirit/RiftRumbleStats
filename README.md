@@ -1,0 +1,1 @@
+Libraries: Discord.NET, CSVHelper
