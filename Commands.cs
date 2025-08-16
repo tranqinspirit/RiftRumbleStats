@@ -6,7 +6,6 @@ using Discord.Net;
 using Discord.Rest;
 using Discord.WebSocket;
 using Microsoft.VisualBasic.ApplicationServices;
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.Eventing.Reader;
@@ -23,6 +22,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Xml;
+using static RiftRumbleStats.Client;
 using static System.Windows.Forms.DataFormats;
 
 namespace RiftRumbleStats
@@ -31,6 +32,7 @@ namespace RiftRumbleStats
     {
         private readonly DiscordSocketClient _client;
         private readonly CommandService _commands;
+        private readonly ClientData _clientData;
         public static IEmote yesreact = new Emoji("✅");
         public static IEmote noreact = new Emoji("⛔");
         private ulong guildId;
@@ -136,13 +138,7 @@ namespace RiftRumbleStats
 			}
             [Command("savereplays")]
             public async Task SaveReplays(int messageCount)
-            {
-				if (Context.Message.Author.Id != 102920670630916096)
-				{
-					Console.WriteLine("Not allowed to use replay commands.");
-					return;
-				}
-               
+            {              
                 List<string> fileNameList = [];
 				List<string> urlArray = [];
 				var messages = await Context.Message.Channel.GetMessagesAsync(messageCount + 1).FlattenAsync();
@@ -218,12 +214,6 @@ namespace RiftRumbleStats
 			[Command("loadreplays")]
             public async Task LoadReplays()
             {
-            	if (Context.Message.Author.Id != 102920670630916096)
-				{
-					Console.WriteLine("Not allowed to use replay commands.");
-					return;
-				}
-
 				DirectoryInfo dir = new DirectoryInfo(fileclientDir);
 				FileInfo[] files = dir.GetFiles();
 
@@ -250,12 +240,6 @@ namespace RiftRumbleStats
             [Command("batchreport")]
             public async Task BatchReport()
             {
-				if (Context.Message.Author.Id != 102920670630916096)
-				{
-					Console.WriteLine("Not allowed to use replay commands.");
-					return;
-				}
-
 				var regex = new Regex(@"^NA1-\d+\.csv$", RegexOptions.IgnoreCase);
 
 				var files = Directory
@@ -283,9 +267,15 @@ namespace RiftRumbleStats
 
 					await Context.Message.AddReactionsAsync([yesreact]);
                     await Task.WhenAll(FileTaskList);
-
-					string outputFile = fileclientDir + "BatchReport" + DateTime.Now.ToString("M-d-yyyy") + ".csv";
-                    await channel.SendFileAsync(outputFile);
+                    try
+                    {
+                        string outputFile = fileclientDir + "BatchReport" + DateTime.Now.ToString("M-d-yyyy") + ".csv";
+						await channel.SendFileAsync(outputFile);
+					}
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"BatchReport error: {ex.Message}");
+                    }              
 				}
             }
 		}
@@ -321,20 +311,22 @@ namespace RiftRumbleStats
             }
             catch (HttpException exception)
             {
-                // If our command was invalid, we should catch an ApplicationCommandException. This exception contains the path of the error as well as the error message. You can serialize the Error field in the exception to get a visual of where your error is.
-                var json = JsonConvert.SerializeObject(exception.Errors, Formatting.Indented);
-
-                // You can send this error somewhere or just print it to the console, for this example we're just going to print it.
-                Console.WriteLine(json);
+                Console.WriteLine(exception.Message);
             }
         }
 
         // Retrieve client and CommandService instance via ctor
-        public CommandHandler(DiscordSocketClient client, CommandService commands, string filePath)
+        public CommandHandler(DiscordSocketClient client, CommandService commands)
         {
             _commands = commands;
             _client = client;
-			fileclientDir = filePath + "test\\";
+
+			string configFile = "Config.json";
+			string configPath = Path.Combine(Directory.GetCurrentDirectory(), configFile);
+
+			string jsonFile = File.ReadAllText(configFile);
+			_clientData = JsonSerializer.Deserialize<ClientData>(jsonFile);
+			fileclientDir = _clientData.fileDir + "test\\";
 		}
 
         public async Task InstallCommandsAsync()
@@ -362,14 +354,28 @@ namespace RiftRumbleStats
 
             int argPos = 0; // check the ! in the first char of the message
 
-            // Determine if the message is a command based on the prefix and make sure no bots trigger commands
-            // TODO get the channel from a configuration file or something
-            if (!(message.HasCharPrefix('!', ref argPos) ||
+			// Determine if the message is a command based on the prefix and make sure no bots trigger commands
+			if (!(message.HasCharPrefix('!', ref argPos) ||
                 message.HasMentionPrefix(_client.CurrentUser, ref argPos) || 
-                message.Author.IsBot ||
-                message.Channel.Id != 1365079374529040384))
+                message.Author.IsBot))
             {
-                return;
+                if (message.HasCharPrefix('!', ref argPos))
+                {
+
+                    if (!_clientData.modUsers.Contains(message.Author.Id))
+                    {
+                        Console.WriteLine($"User not allowed to use commands. : {message.Author.Username}");
+                        return;
+                    }
+
+                    if (!_clientData.modChannels.Contains(message.Channel.Id))
+                    {
+                        Console.WriteLine($"Wrong channel for commands. : {message.Channel.Id}");
+                        return;
+                    }
+                }
+
+				return;
             }
             
 			// Create a WebSocket-based command context based on the message

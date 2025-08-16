@@ -1,8 +1,10 @@
-﻿using Discord;
+﻿//#define STARTUPDEBUG
+
+using Discord;
 using Discord.Commands;
 using Discord.Net;
 using Discord.WebSocket;
-using Newtonsoft.Json;
+using System.Text.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -11,6 +13,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml;
 
 // Primarily backend functionality
 namespace RiftRumbleStats
@@ -19,7 +22,15 @@ namespace RiftRumbleStats
     {
         private static DiscordSocketClient _client;
         private static CommandService _commands;
-		public static string fileDir = "";
+        private static ClientData _clientData;
+
+        public class ClientData
+        {
+            public string accessToken {get;set;}
+            public List<ulong> modChannels {get;set;}
+            public List<ulong> modUsers {get;set;}
+            public string fileDir {get;set;}
+		}
 
 		private static Task Log(LogMessage msg)
         {
@@ -28,7 +39,7 @@ namespace RiftRumbleStats
         }
 
         public static async Task Main()
-        {
+        {   
             // Actually enable the gatewayintents..
             var config = new DiscordSocketConfig
             {
@@ -41,23 +52,41 @@ namespace RiftRumbleStats
             // Get the client going
             try
             {
-                String token;
-                using (StreamReader reader = new(fileDir + "Config.txt")) // plug in correct filepath to not error out
+                string configFile = "Config.json";
+                string configPath = Path.Combine(Directory.GetCurrentDirectory(), configFile);
+
+                if (File.Exists(configPath))
                 {
-                    token = reader.ReadToEnd();
+                    string jsonFile = File.ReadAllText(configFile);
+                    _clientData = JsonSerializer.Deserialize<ClientData>(jsonFile);
+#if STARTUPDEBUG
+                    Console.WriteLine($"Token: {_clientData.accessToken}");
+                    foreach (var channel in _clientData.modChannels)
+                    {
+                        Console.WriteLine("Mod channel: " + channel);
+                    }
+					foreach (var user in _clientData.modUsers)
+					{
+						Console.WriteLine("Mod channel: " + user);
+					}
+
+                    Console.WriteLine("filedir: " + _clientData.fileDir);
+#endif
+                }
+                else
+                {
+                    Console.WriteLine("No config file found.");
+                    return;
                 }
 
-                await _client.LoginAsync(TokenType.Bot, token);
+                await _client.LoginAsync(TokenType.Bot, _clientData.accessToken);
                 await _client.StartAsync();
-
-                // check perms
 
                 // Initiate the command handler
                 _commands = new CommandService();
-                CommandHandler handler = new RiftRumbleStats.CommandHandler(_client, _commands, fileDir);
+                CommandHandler handler = new RiftRumbleStats.CommandHandler(_client, _commands);
                 await handler.InstallCommandsAsync();
 
-                // TODO: initialize the sheet
                 // SLASH COMMANDS for grabbing stuff?
 
                 // Blocks the task until the program closes.
