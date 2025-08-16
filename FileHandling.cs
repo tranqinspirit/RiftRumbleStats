@@ -41,9 +41,10 @@ namespace RiftRumbleStats
             public string TOTAL_DAMAGE_TAKEN {get; set;}
             public string TOTAL_DAMAGE_SHIELDED_ON_TEAMMATES { get; set; }
             public string TOTAL_HEAL_ON_TEAMMATES {get; set;}
-            public string TOTAL_TIME_CROWD_CONTROL_DEALT_TO_CHAMPIONS { get; set; }
+            public string TIME_CCING_OTHERS { get; set; }
             public string VISION_SCORE { get; set; }
             public string LARGEST_MULTI_KILL { get; set; }
+            public string OBJECTIVES_STOLEN { get; set; }
 
 		}
 
@@ -117,10 +118,11 @@ namespace RiftRumbleStats
                 Map(m => m.TOTAL_DAMAGE_TAKEN).Name("Total Damage Taken");
                 Map(m => m.TOTAL_DAMAGE_SHIELDED_ON_TEAMMATES).Name("Total Damage Shielded On Teammates");
                 Map(m => m.TOTAL_HEAL_ON_TEAMMATES).Name("Total Healing On Teammates");
-                Map(m => m.TOTAL_TIME_CROWD_CONTROL_DEALT_TO_CHAMPIONS).Name("Total CC On Champions");
+                Map(m => m.TIME_CCING_OTHERS).Name("CC Score");
                 Map(m => m.VISION_SCORE).Name("Vision Score");
                 Map(m => m.LARGEST_MULTI_KILL).Name("Largest Multikill");
-		    }
+				Map(m => m.OBJECTIVES_STOLEN).Name("Objectives Stolen");
+			}
         }
 
 		public static string FormatDuration(long milliseconds)
