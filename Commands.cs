@@ -357,9 +357,10 @@ namespace RiftRumbleStats
 			}
 
 		}
-
+        /*
 		public async Task Client_Ready(DiscordSocketClient client)
         {
+            
             // Let's build a guild command! We're going to need a guild so lets just put that in a variable.
             var guild = client.GetGuild(guildId);
 
@@ -392,6 +393,7 @@ namespace RiftRumbleStats
                 Console.WriteLine(exception.Message);
             }
         }
+        */
 
         // Retrieve client and CommandService instance via ctor
         public CommandHandler(DiscordSocketClient client, CommandService commands)
