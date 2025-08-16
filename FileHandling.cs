@@ -132,14 +132,7 @@ namespace RiftRumbleStats
 			int minutes = time.Minutes;
 			int seconds = time.Seconds;
 
-			if (time.TotalHours >= 1)
-			{
-				return $"{hours}h {minutes}m {seconds}s";
-			}
-			else
-			{
-				return $"{minutes}m {seconds}s";
-			}
+			return $"{hours}:{minutes}:{seconds}";
 		}
 		public static Task LoadReplayFile(string replayDir, string replayFile)
 		{
