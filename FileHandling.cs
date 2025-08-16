@@ -2,17 +2,12 @@
 
 using CsvHelper;
 using CsvHelper.Configuration;
-using CsvHelper.Configuration.Attributes;
 using Discord.WebSocket;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Eventing.Reader;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Reflection.Metadata.Ecma335;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -23,29 +18,36 @@ namespace RiftRumbleStats
 	public partial class FileHandling
     {
 		private static readonly SemaphoreSlim csvReportLock = new SemaphoreSlim(1, 1);
-		public class PlayerData
-        {
-			public string gameID {get; set;}
-            public string gameLength { get; set; }
+		public class PlayerData : IEquatable<PlayerData>
+		{
+			public string gameID { get; set; }
+			public string gameLength { get; set; }
 			public string RIOT_ID_GAME_NAME { get; set; }  // name
-            public string SKIN { get; set; }      // champ
-            public string CHAMPIONS_KILLED { get; set; }  //count
-            public string NUM_DEATHS { get; set; }  // count
-            public string ASSISTS { get; set; }   // count
-            public string TEAM { get; set; }  //100 (red) 200 (blue)
-            public string WIN { get; set; }  // Win/Fail  
-            public string MINIONS_KILLED { get; set; }   // count
-            public string GOLD_EARNED { get; set; }    // count
-            public string TOTAL_DAMAGE_DEALT_TO_CHAMPIONS {get; set;}
-            public string TOTAL_DAMAGE_DEALT_TO_OBJECTIVES {get; set;}
-            public string TOTAL_DAMAGE_TAKEN {get; set;}
-            public string TOTAL_DAMAGE_SHIELDED_ON_TEAMMATES { get; set; }
-            public string TOTAL_HEAL_ON_TEAMMATES {get; set;}
-            public string TIME_CCING_OTHERS { get; set; }
-            public string VISION_SCORE { get; set; }
-            public string LARGEST_MULTI_KILL { get; set; }
-            public string OBJECTIVES_STOLEN { get; set; }
+			public string SKIN { get; set; }      // champ
+			public string CHAMPIONS_KILLED { get; set; }  // count
+			public string NUM_DEATHS { get; set; }  // count
+			public string ASSISTS { get; set; }   // count
+			public string TEAM { get; set; }  // 100 (red) 200 (blue)
+			public string WIN { get; set; }  // Win/Fail  
+			public string MINIONS_KILLED { get; set; }   // count
+			public string GOLD_EARNED { get; set; }    // count
+			public string TOTAL_DAMAGE_DEALT_TO_CHAMPIONS { get; set; }
+			public string TOTAL_DAMAGE_DEALT_TO_OBJECTIVES { get; set; }
+			public string TOTAL_DAMAGE_TAKEN { get; set; }
+			public string TOTAL_DAMAGE_SHIELDED_ON_TEAMMATES { get; set; }
+			public string TOTAL_HEAL_ON_TEAMMATES { get; set; }
+			public string TIME_CCING_OTHERS { get; set; }
+			public string VISION_SCORE { get; set; }
+			public string LARGEST_MULTI_KILL { get; set; }
+			public string OBJECTIVES_STOLEN { get; set; }
 
+			public bool Equals(PlayerData other) =>
+				other is not null &&
+				gameID == other.gameID &&
+				RIOT_ID_GAME_NAME == other.RIOT_ID_GAME_NAME;
+
+			public override bool Equals(object obj) => Equals(obj as PlayerData);
+			public override int GetHashCode() => HashCode.Combine(gameID, RIOT_ID_GAME_NAME);
 		}
 
 		public class GameData
@@ -110,6 +112,7 @@ namespace RiftRumbleStats
 
 			return $"{hours}:{minutes}:{seconds}";
 		}
+
 		public static Task LoadReplayFile(string replayDir, string replayFile)
 		{
             // go through all of the files inside the directory, make sure they're not executables, make sure they're valid, add them to a list of valid files, then parse them
@@ -225,96 +228,22 @@ namespace RiftRumbleStats
             }
 		}
 
-        public static Task BatchReport(string replayDir, string csvFile)
-        {
-			if (!File.Exists(csvFile))
-            {
-                return Task.Run(() =>
-                {
-                    Console.WriteLine("file doesn't exist.");
-                });
-            }
-            else
-            {
-                return Task.Run(async () =>
-                {
-                    await csvReportLock.WaitAsync();
-                    try
-                    {
-                        bool firstRun = true;
-                        string outputFile = replayDir + "BatchReport" + DateTime.Now.ToString("M-d-yyyy") + ".csv";
+		public static List<PlayerData> ParseReplayJson(string jsonContent, string gameId)
+		{
+			var wrapper = JsonSerializer.Deserialize<GameData>(jsonContent);
+			if (wrapper == null || string.IsNullOrWhiteSpace(wrapper.statsJson))
+				return new List<PlayerData>();
 
-                        if (File.Exists(outputFile))
-                        {
-                            firstRun = false;
-                        }
-                        else
-                        {
-                            try
-                            {
-                                File.Create(outputFile).Dispose();
-                            }
-                            catch (IOException ex)
-                            {
-                                Console.WriteLine("File Creation ex: " + ex.Message);
-                                return;
-                            }
-                        }
+			var players = JsonSerializer.Deserialize<List<PlayerData>>(wrapper.statsJson);
 
-						try
-                        {
-							//Console.WriteLine("Opening: " + csvFile);
+			string formattedLength = FormatDuration(wrapper.gameLength);
+			foreach (var p in players ?? Enumerable.Empty<PlayerData>())
+			{
+				p.gameID = gameId;
+				p.gameLength = formattedLength;
+			}
 
-                            try
-                            {
-								CsvConfiguration config = new CsvConfiguration(CultureInfo.InvariantCulture)
-								{
-									HasHeaderRecord = firstRun,
-								};
-
-								using (var reader = new StreamReader(csvFile))
-                                using (var csvRead = new CsvReader(reader, config))
-								using (var writer = new StreamWriter(outputFile, append: true))
-								using (var csvWrite = new CsvWriter(writer, config))
-								{
-                                    csvRead.Context.RegisterClassMap<SheetMap>();
-                                    csvWrite.Context.RegisterClassMap<SheetMap>();
-                                    
-                                    var inputRecords = csvRead.GetRecords<PlayerData>();
-
-                                    foreach (var record in inputRecords)
-                                    {
-                                        csvWrite.WriteRecords(inputRecords);
-                                        csvWrite.NextRecord();
-                                    }
-									csvWrite.Flush();
-								}
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine("Read/write run " + ex.Message);
-                                await Task.Delay(2000);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine("Main try Exception");
-                            Console.WriteLine(ex.Message);
-						}
-					}
-                    catch (IOException)
-                    {
-                        Console.WriteLine("outer IOexception");
-                        await Task.Delay(2000);
-                    }
-                    catch (Exception ex)
-                    {
-						Console.WriteLine("outer exception" + ex.Message);
-                    }
-
-					csvReportLock.Release();
-				});
-            }
+			return players ?? new List<PlayerData>();
 		}
-	}
+		}
 }
