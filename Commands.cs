@@ -254,29 +254,35 @@ namespace RiftRumbleStats
                     Console.WriteLine("No replays to process.");
                     await ReplyAsync("No replays to process.");
                 }
+                else if (fCount < 2)
+                {
+                    Console.WriteLine("Only one replay. Only use with more than one.");
+                    await ReplyAsync("Only one replay. Only use with more than one.");
+                    return;
+				}
                 else
                 {
                     var channel = Context.Channel;
                     IList<Task> FileTaskList = new List<Task>();
 
-					for (int i = 0; i < fCount; i++)
-					{
+                    for (int i = 0; i < fCount; i++)
+                    {
                         //Console.WriteLine("batchreport file found debug: " + files[i].ToString());
-						FileTaskList.Add(RiftRumbleStats.FileHandling.BatchReport(fileclientDir, files[i].ToString()));
-					}
+                        FileTaskList.Add(RiftRumbleStats.FileHandling.BatchReport(fileclientDir, files[i].ToString()));
+                    }
 
-					await Context.Message.AddReactionsAsync([yesreact]);
+                    await Context.Message.AddReactionsAsync([yesreact]);
                     await Task.WhenAll(FileTaskList);
                     try
                     {
                         string outputFile = fileclientDir + "BatchReport" + DateTime.Now.ToString("M-d-yyyy") + ".csv";
-						await channel.SendFileAsync(outputFile);
-					}
+                        await channel.SendFileAsync(outputFile);
+                    }
                     catch (Exception ex)
                     {
                         Console.WriteLine($"BatchReport error: {ex.Message}");
-                    }              
-				}
+                    }
+                }
             }
 		}
 
