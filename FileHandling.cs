@@ -35,7 +35,8 @@ namespace RiftRumbleStats
             public string TEAM { get; set; }  //100 (red) 200 (blue)
             public string WIN { get; set; }  // Win/Fail  
             public string MINIONS_KILLED { get; set; }   // count
-            public string GOLD_EARNED { get; set; }    // count
+			public string NEUTRAL_MINIONS_KILLED { get; set; }
+			public string GOLD_EARNED { get; set; }    // count
             public string TOTAL_DAMAGE_DEALT_TO_CHAMPIONS {get; set;}
             public string TOTAL_DAMAGE_DEALT_TO_OBJECTIVES {get; set;}
             public string TOTAL_DAMAGE_TAKEN {get; set;}
@@ -45,7 +46,6 @@ namespace RiftRumbleStats
             public string VISION_SCORE { get; set; }
             public string LARGEST_MULTI_KILL { get; set; }
             public string OBJECTIVES_STOLEN { get; set; }
-
 		}
 
 		public class GameData
@@ -87,7 +87,8 @@ namespace RiftRumbleStats
 				Map(m => m.ASSISTS).Name("Assists");
 				Map(m => m.TEAM).Name("Team");
 				Map(m => m.WIN).Name("Win/Loss");
-				Map(m => m.MINIONS_KILLED).Name("CS");
+				Map(m => m.MINIONS_KILLED).Name("Minions Killed");
+				Map(m => m.NEUTRAL_MINIONS_KILLED).Name("Jungle Monsters Killed");		
 				Map(m => m.GOLD_EARNED).Name("Gold Earned");
                 Map(m => m.TOTAL_DAMAGE_DEALT_TO_CHAMPIONS).Name("Total Damage To Champions");
                 Map(m => m.TOTAL_DAMAGE_DEALT_TO_OBJECTIVES).Name("Total Damage To Objectives");
