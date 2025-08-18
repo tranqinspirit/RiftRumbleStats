@@ -1,30 +1,20 @@
 ﻿using CsvHelper;
-using CsvHelper.Configuration;
 using Discord;
 using Discord.Commands;
-using Discord.Net;
-using Discord.Rest;
 using Discord.WebSocket;
-using Microsoft.VisualBasic.ApplicationServices;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Eventing.Reader;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.Xml;
 using static RiftRumbleStats.Client;
-using static System.Windows.Forms.DataFormats;
+using static RiftRumbleStats.FileHandling;
 
 namespace RiftRumbleStats
 {
@@ -237,53 +227,68 @@ namespace RiftRumbleStats
                     await Task.WhenAll(FileTaskList);
                 }
 			}
-            [Command("batchreport")]
-            public async Task BatchReport()
-            {
-				var regex = new Regex(@"^NA1-\d+\.csv$", RegexOptions.IgnoreCase);
 
-				var files = Directory
-					.EnumerateFiles(fileclientDir, "*.csv", SearchOption.TopDirectoryOnly)
-					.Where(f => regex.IsMatch(Path.GetFileName(f)))
+			[Command("batchreport")]
+			public async Task ProcessAttachmentsAsync(int messageCount, SocketTextChannel channel, ulong fromMessageId)
+			{
+				await Context.Message.AddReactionsAsync([yesreact]);
+				var messages = await channel.GetMessagesAsync(fromMessageId, Direction.After, limit: messageCount).FlattenAsync();
+
+				var attachmentTasks = messages
+					.SelectMany(m => m.Attachments)
+					.Where(a => a.Filename.EndsWith(".rofl", StringComparison.OrdinalIgnoreCase))
+					.Select(async attachment =>
+					{
+						using var stream = await fileclient.GetStreamAsync(attachment.Url);
+						using var reader = new StreamReader(stream);
+
+						string fileText = await reader.ReadToEndAsync();
+
+						int startIndex = fileText.IndexOf("{\"gameLength\"");
+						int endIndex = fileText.LastIndexOf('}');
+						if (startIndex == -1 || endIndex == -1 || endIndex <= startIndex)
+							return new List<PlayerData>();
+
+						string jsonBlock = fileText.Substring(startIndex, endIndex - startIndex + 1);
+
+						string gameID = Path.GetFileNameWithoutExtension(attachment.Filename);
+
+						return RiftRumbleStats.FileHandling.ParseReplayJson(jsonBlock, gameID);
+					});
+
+				var results = await Task.WhenAll(attachmentTasks);
+				var allRecords = results.SelectMany(r => r).ToList();
+
+                foreach (var record in allRecords)
+                {
+					record.TEAM = record.TEAM == "100" ? "RED" : "BLUE";
+                    if (record.WIN == "Fail") record.WIN = "Loss";
+				}
+
+				var uniqueRecords = allRecords
+					.GroupBy(r => (r.gameID, r.RIOT_ID_GAME_NAME))
+					.Select(g => g.First())
 					.ToList();
 
-				int fCount = Directory.GetFiles(fileclientDir, "*.csv", SearchOption.TopDirectoryOnly).Length;
-
-                if (fCount == 0)
-                {
-                    Console.WriteLine("No replays to process.");
-                    await ReplyAsync("No replays to process.");
-                }
-                else if (fCount < 2)
-                {
-                    Console.WriteLine("Only one replay. Only use with more than one.");
-                    await ReplyAsync("Only one replay. Only use with more than one.");
-                    return;
+				await using var memoryStream = new MemoryStream();
+				await using (var writer = new StreamWriter(memoryStream, Encoding.UTF8, leaveOpen: true))
+				await using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+				{
+					csv.Context.RegisterClassMap<SheetMap>();
+					csv.WriteRecords(uniqueRecords);
 				}
-                else
-                {
-                    var channel = Context.Channel;
-                    IList<Task> FileTaskList = new List<Task>();
+				memoryStream.Position = 0;
 
-                    for (int i = 0; i < fCount; i++)
-                    {
-                        //Console.WriteLine("batchreport file found debug: " + files[i].ToString());
-                        FileTaskList.Add(RiftRumbleStats.FileHandling.BatchReport(fileclientDir, files[i].ToString()));
-                    }
-
-                    await Context.Message.AddReactionsAsync([yesreact]);
-                    await Task.WhenAll(FileTaskList);
-                    try
-                    {
-                        string outputFile = fileclientDir + "BatchReport" + DateTime.Now.ToString("M-d-yyyy") + ".csv";
-                        await channel.SendFileAsync(outputFile);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"BatchReport error: {ex.Message}");
-                    }
-                }
-            }
+				/* debug print
+				foreach (var record in uniqueRecords)
+				{
+					Console.WriteLine($"{record.gameID},{record.gameLength},{record.RIOT_ID_GAME_NAME},...");
+				}
+                */
+                string outputFile = "MemoryBatchReport" + DateTime.Now.ToString("M-d-yyyy") + ".csv";
+				// send file to Discord
+				await channel.SendFileAsync(memoryStream, outputFile, "Batch Report Completed.");
+			}
 		}
         /*
 		public async Task Client_Ready(DiscordSocketClient client)
@@ -358,7 +363,8 @@ namespace RiftRumbleStats
         {
             // Don't process the command if it was a system message
             var message = messageParam as SocketUserMessage;
-            if (message == null) return;
+            if (message == null) 
+                return;
 
             int argPos = 0; // check the ! in the first char of the message
 
