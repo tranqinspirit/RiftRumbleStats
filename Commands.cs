@@ -287,7 +287,7 @@ namespace RiftRumbleStats
                 */
                 string outputFile = "MemoryBatchReport" + DateTime.Now.ToString("M-d-yyyy") + ".csv";
 				// send file to Discord
-				await channel.SendFileAsync(memoryStream, outputFile, "Batch Report Completed.");
+				await Context.Message.Channel.SendFileAsync(memoryStream, outputFile, "Batch Report Completed.");
 			}
 		}
         /*
