@@ -88,7 +88,6 @@ namespace RiftRumbleStats
 						var embed = new EmbedBuilder()
 							.WithTitle("📥 Private Mod Message")
 							.AddField("Message ID", messageId, inline: true)
-							.AddField("From", $"{component.User} ({userId})", inline: true)
 							.AddField("Sent At", timestamp, inline: false)
 							.WithDescription(content)
 							.WithColor(Color.Blue)
