@@ -6,6 +6,7 @@ using Discord.WebSocket;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -18,6 +19,7 @@ namespace RiftRumbleStats
         private static CommandService _commands;
         private static ClientData _clientData;
 		private readonly Dictionary<ulong, List<string>> _pendingMessages = new();
+		private readonly Dictionary<string, ulong> _messageSenders = new();
 
 		public class ClientData
         {
@@ -71,7 +73,7 @@ namespace RiftRumbleStats
 		{
 			ulong userId = component.User.Id;
 
-			// Handle Send button (user confirms to send their DM)
+			// --- SEND BUTTON ---
 			if (component.Data.CustomId == $"send_{userId}")
 			{
 				if (_pendingMessages.TryGetValue(userId, out var messages))
@@ -85,8 +87,10 @@ namespace RiftRumbleStats
 						string content = string.Join("\n", messages);
 						string timestamp = DateTime.UtcNow.ToLocalTime().ToString("yyyy-MM-dd hh:mm tt (zzz)");
 
+						_messageSenders[messageId] = userId;
+
 						var embed = new EmbedBuilder()
-							.WithTitle("📥 Private Mod Message")
+							.WithTitle("🔒 Private Mod Message")
 							.AddField("Message ID", messageId, inline: true)
 							.AddField("Sent At", timestamp, inline: false)
 							.WithDescription(content)
@@ -110,7 +114,6 @@ namespace RiftRumbleStats
 							msg.Components = new ComponentBuilder().Build();
 						});
 
-						// Remove pending message after sending
 						_pendingMessages.Remove(userId);
 					}
 					else
@@ -123,7 +126,8 @@ namespace RiftRumbleStats
 					await component.RespondAsync("⚠️ No message session found.", ephemeral: true);
 				}
 			}
-			// Handle Cancel button (user cancels message session)
+
+			// --- CANCEL BUTTON ---
 			else if (component.Data.CustomId == $"cancel_{userId}")
 			{
 				if (_pendingMessages.ContainsKey(userId))
@@ -141,16 +145,40 @@ namespace RiftRumbleStats
 					await component.RespondAsync("⚠️ No session found to cancel.", ephemeral: true);
 				}
 			}
-			// Handle Log Info button in the server channel embed
+
+			// --- LOG BUTTON ---
 			else if (component.Data.CustomId.StartsWith("log_"))
 			{
 				string messageId = component.Data.CustomId.Substring("log_".Length);
 
-				Console.WriteLine($"[LOG BUTTON CLICKED] Message ID: {messageId} | By User: {component.User} ({component.User.Id}) | At: {DateTime.Now}");
+				if (_messageSenders.TryGetValue(messageId, out var originalSenderId))
+				{
+					Console.WriteLine($"[LOG BUTTON CLICKED] Message ID: {messageId} | Original Sender ID: {originalSenderId} | Logged By: {component.User} ({component.User.Id}) | At: {DateTime.Now}");
+
+					// DM the original sender
+					try
+					{
+						var originalUser = _client.GetUser(originalSenderId);
+						if (originalUser != null)
+						{
+							string loggerTag = $"{component.User.Username}#{component.User.Discriminator}";
+							await originalUser.SendMessageAsync(
+								$"🔍 Your message (ID: `{messageId}`) was logged by **{loggerTag}**.");
+						}
+					}
+					catch (Exception ex)
+					{
+						Console.WriteLine($"[WARN] Could not DM original sender {originalSenderId}: {ex.Message}");
+					}
+				}
+				else
+				{
+					Console.WriteLine($"[LOG BUTTON CLICKED] Message ID: {messageId} | No original sender info found | Logged By: {component.User} ({component.User.Id}) | At: {DateTime.Now}");
+				}
 
 				await component.RespondAsync($"Logged message info for ID: {messageId}", ephemeral: true);
 
-				// Disable the button after click
+				// Disable the button and modify the embed
 				var disabledButton = new ButtonBuilder()
 					.WithLabel("Log Info")
 					.WithCustomId(component.Data.CustomId)
@@ -161,10 +189,29 @@ namespace RiftRumbleStats
 					.WithButton(disabledButton)
 					.Build();
 
-				await component.Message.ModifyAsync(msg =>
+				var originalEmbed = component.Message.Embeds.FirstOrDefault();
+				if (originalEmbed != null)
 				{
-					msg.Components = disabledComponent;
-				});
+					var updatedEmbed = new EmbedBuilder()
+						.WithTitle(originalEmbed.Title)
+						.WithDescription(originalEmbed.Description)
+						.WithColor(originalEmbed.Color ?? Color.Blue)
+						.WithTimestamp(originalEmbed.Timestamp ?? DateTimeOffset.Now);
+
+					foreach (var field in originalEmbed.Fields)
+					{
+						updatedEmbed.AddField(field.Name, field.Value, field.Inline);
+					}
+
+					string loggerTag = $"{component.User.Username}#{component.User.Discriminator}";
+					updatedEmbed.AddField("📝 Logged by", loggerTag, inline: true);
+
+					await component.Message.ModifyAsync(msg =>
+					{
+						msg.Embed = updatedEmbed.Build();
+						msg.Components = disabledComponent;
+					});
+				}
 			}
 			else
 			{
