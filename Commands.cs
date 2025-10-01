@@ -25,7 +25,6 @@ namespace RiftRumbleStats
         private readonly ClientData _clientData;
         public static IEmote yesreact = new Emoji("✅");
         public static IEmote noreact = new Emoji("⛔");
-        private ulong guildId;
 		public static readonly HttpClient fileclient = new HttpClient();
         private static string fileclientDir;
 
