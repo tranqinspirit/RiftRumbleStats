@@ -153,22 +153,20 @@ namespace RiftRumbleStats
 
 				if (_messageSenders.TryGetValue(messageId, out var originalSenderId))
 				{
-					Console.WriteLine($"[LOG BUTTON CLICKED] Message ID: {messageId} | Original Sender ID: {originalSenderId} | Logged By: {component.User} ({component.User.Id}) | At: {DateTime.Now}");
+					var originalUser = _client.GetUser(originalSenderId);
 
-					// DM the original sender
-					try
+					string loggerTag = $"{component.User.Username}#{component.User.Discriminator}";
+					string originalSenderTag = originalUser != null
+						? $"{originalUser.Username} ({originalSenderId})"
+						: $"UnknownUser ({originalSenderId})";
+
+					Console.WriteLine($"[LOG BUTTON CLICKED] Message ID: {messageId} | Original Sender: {originalSenderTag} | Logged By: {loggerTag} ({component.User.Id}) | At: {DateTime.Now}");
+
+					// ✅ DM the original sender
+					if (originalUser != null)
 					{
-						var originalUser = _client.GetUser(originalSenderId);
-						if (originalUser != null)
-						{
-							string loggerTag = $"{component.User.Username}#{component.User.Discriminator}";
-							await originalUser.SendMessageAsync(
-								$"🔍 Your message (ID: `{messageId}`) was logged by **{loggerTag}**.");
-						}
-					}
-					catch (Exception ex)
-					{
-						Console.WriteLine($"[WARN] Could not DM original sender {originalSenderId}: {ex.Message}");
+						await originalUser.SendMessageAsync(
+							$"🔍 Your message (ID: `{messageId}`) was logged by **{loggerTag}**.");
 					}
 				}
 				else
@@ -203,7 +201,7 @@ namespace RiftRumbleStats
 						updatedEmbed.AddField(field.Name, field.Value, field.Inline);
 					}
 
-					string loggerTag = $"{component.User.Username}#{component.User.Discriminator}";
+					string loggerTag = $"{component.User.Username}";
 					updatedEmbed.AddField("📝 Logged by", loggerTag, inline: true);
 
 					await component.Message.ModifyAsync(msg =>
