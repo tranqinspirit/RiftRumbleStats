@@ -258,10 +258,26 @@ namespace RiftRumbleStats
 				var results = await Task.WhenAll(attachmentTasks);
 				var allRecords = results.SelectMany(r => r).ToList();
 
-                foreach (var record in allRecords)
-                {
-					record.TEAM = record.TEAM == "100" ? "RED" : "BLUE";
-                    if (record.WIN == "Fail") record.WIN = "Loss";
+				for (int i = 0; i < allRecords.Count; i += 5)
+				{
+					var group = allRecords.Skip(i).Take(5).ToList();
+					if (!group.Any()) continue;
+
+					// Normalize team and win fields
+					foreach (var p in group)
+					{
+						p.TEAM = p.TEAM == "100" ? "RED" : "BLUE";
+						if (p.WIN == "Fail") p.WIN = "Loss";
+					}
+
+					// Compute KillAssistShare
+					double totalKills = group.Sum(p => int.TryParse(p.CHAMPIONS_KILLED, out var k) ? k : 0);
+					foreach (var p in group)
+					{
+						int playerKills = int.TryParse(p.CHAMPIONS_KILLED, out var k) ? k : 0;
+						int playerAssists = int.TryParse(p.ASSISTS, out var a) ? a : 0;
+						p.KP = (int)Math.Round((playerKills + playerAssists) / totalKills * 100);
+					}
 				}
 
 				var uniqueRecords = allRecords

@@ -41,6 +41,7 @@ namespace RiftRumbleStats
             public string VISION_SCORE { get; set; }
             public string LARGEST_MULTI_KILL { get; set; }
             public string OBJECTIVES_STOLEN { get; set; }
+            public double KP { get; set; }
 
 			public bool Equals(PlayerData other) =>
 				other is not null &&
@@ -102,6 +103,7 @@ namespace RiftRumbleStats
                 Map(m => m.VISION_SCORE).Name("Vision Score");
                 Map(m => m.LARGEST_MULTI_KILL).Name("Largest Multikill");
 				Map(m => m.OBJECTIVES_STOLEN).Name("Objectives Stolen");
+				Map(m => m.KP).Name("Kill Participation");
 			}
         }
 
@@ -187,10 +189,9 @@ namespace RiftRumbleStats
                                 else                 p.TEAM = "BLUE";
 
                                 if (p.WIN == "Fail") p.WIN = "Loss";
-
 							}
 
-                            string outputName = replayDir + gameID + ".csv";
+							string outputName = Path.Combine(replayDir, gameID + ".csv");
 #if SHEETBUILDDEBUG
 							foreach (var p in players)
                             {
