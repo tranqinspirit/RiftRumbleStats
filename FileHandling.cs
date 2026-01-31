@@ -41,7 +41,8 @@ namespace RiftRumbleStats
             public string VISION_SCORE { get; set; }
             public string LARGEST_MULTI_KILL { get; set; }
             public string OBJECTIVES_STOLEN { get; set; }
-            public double KP { get; set; }
+			public double KDA { get; set; }
+			public double KP { get; set; }		
 
 			public bool Equals(PlayerData other) =>
 				other is not null &&
@@ -103,6 +104,7 @@ namespace RiftRumbleStats
                 Map(m => m.VISION_SCORE).Name("Vision Score");
                 Map(m => m.LARGEST_MULTI_KILL).Name("Largest Multikill");
 				Map(m => m.OBJECTIVES_STOLEN).Name("Objectives Stolen");
+				Map(m => m.KDA).Name("KDA");
 				Map(m => m.KP).Name("Kill Participation");
 			}
         }

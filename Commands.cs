@@ -257,27 +257,45 @@ namespace RiftRumbleStats
 
 				var results = await Task.WhenAll(attachmentTasks);
 				var allRecords = results.SelectMany(r => r).ToList();
+                var redKills = 0;
+                var blueKills = 0;
 
-				for (int i = 0; i < allRecords.Count; i += 5)
+
+				for (int i = 0; i < allRecords.Count; i += 10)
 				{
-					var group = allRecords.Skip(i).Take(5).ToList();
+					var group = allRecords.Skip(i).Take(10).ToList();
 					if (!group.Any()) continue;
 
 					// Normalize team and win fields
 					foreach (var p in group)
 					{
-						p.TEAM = p.TEAM == "100" ? "RED" : "BLUE";
+                        if (p.TEAM == "100")
+                        {
+                            p.TEAM = "BLUE";
+                            blueKills += Int32.Parse(p.CHAMPIONS_KILLED);
+                        }
+                        else
+                        {
+                            p.TEAM = "RED";
+							redKills += Int32.Parse(p.CHAMPIONS_KILLED);
+						}
 						if (p.WIN == "Fail") p.WIN = "Loss";
 					}
 
-					// Compute KillAssistShare
-					double totalKills = group.Sum(p => int.TryParse(p.CHAMPIONS_KILLED, out var k) ? k : 0);
+                    // Now that we've done per-team parsing, do per-team stat calcs
 					foreach (var p in group)
 					{
+                        var teamKills = 0;
+						if (p.TEAM == "RED") teamKills = redKills; else teamKills = blueKills;
+
 						int playerKills = int.TryParse(p.CHAMPIONS_KILLED, out var k) ? k : 0;
+						int playerDeaths = int.TryParse(p.NUM_DEATHS, out var d) ? d : 0;
+                        if (playerDeaths == 0) playerDeaths = 1;
 						int playerAssists = int.TryParse(p.ASSISTS, out var a) ? a : 0;
-						p.KP = (int)Math.Round((playerKills + playerAssists) / totalKills * 100);
-					}
+
+						p.KDA = (double)Math.Round(((double)playerKills + (double)playerAssists) / (double)playerDeaths, 2);
+                        p.KP = (double)Math.Round(((double)playerKills + (double)playerAssists) / (double)teamKills, 2);
+                    }
 				}
 
 				var uniqueRecords = allRecords
